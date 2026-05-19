@@ -1,0 +1,91 @@
+FROM osrf/ros:humble-desktop-full
+
+# Add vscode user with same UID and GID as your host system
+ARG USERNAME=ubuntu
+ARG USER_UID=1000
+ARG USER_GID=$USER_UID
+
+# Setup entrypoint
+COPY ./ros_entrypoint.sh /
+RUN chmod +x /ros_entrypoint.sh
+
+# Rosdep update + system & ROS packages
+RUN rosdep update && \
+    apt-get update -q && \
+    apt-get upgrade -q -y && \
+    apt-get install -y --no-install-recommends \
+    # System utilities
+    git \
+    nano \
+    python3-pip \
+    python3-transforms3d \
+    software-properties-common \
+    sudo \
+    wget \
+    curl \
+    zstd \
+    # Audio dependencies for sounddevice / Whisper
+    portaudio19-dev \
+    libportaudio2 \
+    libsndfile1 \
+    ffmpeg \
+    # ROS packages (original set preserved)
+    ros-humble-nav2-bringup \
+    ros-humble-nav2-simple-commander \
+    ros-humble-octomap-server \
+    ros-humble-pointcloud-to-laserscan \
+    ros-humble-robot-localization \
+    ros-humble-rmw-cyclonedds-cpp \
+    ros-humble-rqt-tf-tree \
+    ros-humble-slam-toolbox \
+    ros-humble-spatio-temporal-voxel-layer \
+    ros-humble-tf-transformations \
+    ros-humble-turtlebot3 \
+    ros-humble-turtlebot3-gazebo \
+    ros-humble-urdf-tutorial \
+    ros-humble-vector-pursuit-controller \
+    ros-humble-velodyne-simulator \
+    # Added for nav2gpt: cv_bridge + OpenCV ROS bindings
+    ros-humble-cv-bridge \
+    ros-humble-vision-opencv && \
+    # Clean up
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+
+# Install Ollama (runs as a local server inside the container)
+RUN curl -fsSL https://ollama.com/install.sh | sh
+
+# Install Python dependencies for nav2gpt
+# whisper needs ffmpeg (installed above); sounddevice needs portaudio (installed above)
+RUN pip3 install --no-cache-dir \
+    "numpy==1.26.4" \
+    "torch==2.1.2" \
+    "transforms3d>=0.4.2" \
+    "scipy>=1.11,<1.14" \
+    "opencv-python-headless==4.8.1.78" \
+    "openai-whisper==20240930" \
+    sounddevice \
+    langchain \
+    langchain-community \
+    langchain-ollama \
+    "setuptools<80"
+
+# Create a non-root user with sudo privileges
+# Use || true to handle the case where the group already exists in the base image
+RUN groupadd --gid $USER_GID $USERNAME 2>/dev/null || true && \
+    useradd -s /bin/bash --uid $USER_UID --gid $USER_GID -m $USERNAME && \
+    echo $USERNAME ALL=\(root\) NOPASSWD:ALL > /etc/sudoers.d/$USERNAME && \
+    chmod 0440 /etc/sudoers.d/$USERNAME
+
+# Add user to video and audio groups while still root
+# (audio group needed for microphone access)
+RUN usermod --append --groups video,audio $USERNAME
+
+# Switch from root to user
+USER $USERNAME
+
+# Set default TurtleBot3 model for nav2gpt
+ENV TURTLEBOT3_MODEL=burger
+
+ENTRYPOINT ["/ros_entrypoint.sh"]
+CMD ["bash"]
