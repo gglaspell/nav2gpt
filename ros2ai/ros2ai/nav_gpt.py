@@ -31,7 +31,7 @@ class NavGpt(Node):
         self.get_logger().info("connected to goToPose server")
         self.req = Nav2Gpt.Request()
 
-        self.llm = Ollama(
+        self.llm = OllamaLLM(
             model="llama3"
         )  # assuming you have Ollama installed and have llama3 model pulled with `ollama pull llama3 `
 
