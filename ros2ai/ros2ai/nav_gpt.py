@@ -7,7 +7,7 @@ from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
 from ros2ai_msgs.srv import Nav2Gpt
 
-from langchain_community.llms import Ollama
+from langchain_ollama import OllamaLLM
 # from PIL import Image
 
 import base64
