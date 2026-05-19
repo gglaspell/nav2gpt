@@ -107,9 +107,9 @@ source install/setup.bash
 
 ## Running the Project
 
-You need **three terminals** open inside the container. In VS Code, open new terminals with `` Ctrl+` `` and the `+` button.
+You need **four terminals** open inside the container. In VS Code, open new terminals with `` Ctrl+` `` and the `+` button.
 
-### Terminal 1 — Launch Gazebo + TurtleBot3 + Nav2
+### Terminal 1 — Launch Gazebo + TurtleBot3
 
 ```bash
 source /Humble-llm/nav2gpt_ws/install/setup.bash
@@ -118,7 +118,13 @@ ros2 launch ros2ai turtlebot3_navigation.launch.py
 
 Wait until Gazebo and RViz fully load and Nav2 prints `[lifecycle_manager] Configuring...` messages before proceeding.
 
-### Terminal 2 — Start the Nav2 API Server
+### Terminal 2 — Launch Nav2
+
+```bash
+ros2 launch ros2ai navigation2.launch.py
+```
+
+### Terminal 3 — Start the Nav2 API Server
 
 ```bash
 source /Humble-llm/nav2gpt_ws/install/setup.bash
@@ -130,7 +136,7 @@ Expected output:
 [INFO] [nav2_api_server]: Nav2 API Server is ready
 ```
 
-### Terminal 3 — Start the LLM Voice Node
+### Terminal 4 — Start the LLM Voice Node
 
 ```bash
 source /Humble-llm/nav2gpt_ws/install/setup.bash
@@ -207,6 +213,12 @@ Check microphone access inside the container:
 ```bash
 arecord -l    # list recording devices
 arecord -d 3 test.wav && aplay test.wav   # record 3s test clip
+```
+
+**Map frame missing**
+add a static transform
+```bash
+ros2 run tf2_ros static_transform_publisher 0 0 0 0 0 0 map odom
 ```
 
 ---
