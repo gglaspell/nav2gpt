@@ -41,16 +41,9 @@ git clone https://github.com/gglaspell/nav2gpt.git
 cd nav2gpt
 ```
 
-### 2. Create the Workspace Structure
-
-```bash
-mkdir -p nav2gpt_ws/src
-cd nav2gpt_ws/src
-```
-
 The `.devcontainer/` folder at the repo root contains the `Dockerfile` and `devcontainer.json` that define the container environment.
 
-### 3. Open in VS Code Dev Container
+### 2. Open in VS Code Dev Container
 
 ```bash
 cd ../..       # back to repo root
@@ -65,18 +58,7 @@ Dev Containers: Reopen in Container
 
 The first build takes **10–20 minutes** — it installs ROS 2 Humble, Nav2, Gazebo, Ollama, Whisper, and all Python dependencies.
 
-### 4. Clone nav2gpt into the Workspace (inside the container)
-
-Once the container is open, run in the VS Code terminal:
-
-```bash
-cd /Humble-llm/nav2gpt_ws/src
-git clone https://github.com/gglaspell/nav2gpt.git .
-```
-
-> **Note:** The `.` at the end clones into the current directory instead of creating a subfolder.
-
-### 5. Pull the Ollama Model
+### 3. Pull the Ollama Model
 
 ```bash
 ollama pull llama3
@@ -93,7 +75,7 @@ This downloads ~4.7 GB and only needs to be done once. The model is stored in th
 > self.llm = OllamaLLM(model="llama3.2")
 > ```
 
-### 6. Build the ROS 2 Workspace
+### 4. Build the ROS 2 Workspace
 
 ```bash
 cd /Humble-llm/nav2gpt_ws
