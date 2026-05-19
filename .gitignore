@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# ROS / colcon
+build/
+install/
+log/
+
+# Generated or local media
+*.wav
+*.mp3
+
+# Optional: keep package-local generated audio out of source control
+nav2gpt_ws/src/ros2ai/ros2ai/recorded_audio.wav
+nav2gpt_ws/src/ros2ai/ros2ai/test.mp3
