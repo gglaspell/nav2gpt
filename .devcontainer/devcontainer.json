@@ -1,0 +1,39 @@
+{
+  "name": "nav2gpt ROS 2 Humble",
+  "dockerFile": "Dockerfile",
+  "runArgs": [
+    "--privileged",
+    "--network=host",
+    "--volume=/tmp/.X11-unix:/tmp/.X11-unix",
+    "--volume=/dev:/dev",
+    "--env=DISPLAY=${localEnv:DISPLAY}"
+  ],
+  "workspaceMount": "source=${localWorkspaceFolder},target=/${localWorkspaceFolderBasename},type=bind",
+  "workspaceFolder": "/${localWorkspaceFolderBasename}",
+  "containerEnv": {
+    "DISPLAY": "${localEnv:DISPLAY}",
+    "TURTLEBOT3_MODEL": "burger",
+    "COLCON_WS": "/${localWorkspaceFolderBasename}"
+  },
+  "mounts": [
+    "source=nav2gpt-bashhistory,target=/home/ubuntu/.bash_history,type=volume",
+    "source=ollama-models,target=/root/.ollama,type=volume"
+  ],
+  "customizations": {
+    "vscode": {
+      "settings": {},
+      "extensions": [
+        "njpwerner.autodocstring",
+        "ms-python.autopep8",
+        "ms-vscode.cpptools",
+        "twxs.cmake",
+        "ms-vscode.cmake-tools",
+        "ms-python.pylint",
+        "ms-iot.vscode-ros",
+        "redhat.vscode-xml",
+        "ms-python.python"
+      ]
+    }
+  },
+  "postCreateCommand": "echo 'source /opt/ros/$ROS_DISTRO/setup.bash' >> ~/.bashrc && echo 'source ${COLCON_WS}/nav2gpt_ws/install/setup.bash 2>/dev/null || true' >> ~/.bashrc && echo 'export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp' >> ~/.bashrc && echo 'source /usr/share/colcon_cd/function/colcon_cd.sh' >> ~/.bashrc && echo 'export _colcon_cd_root=/opt/ros/humble/' >> ~/.bashrc && echo 'source /usr/share/colcon_argcomplete/hook/colcon-argcomplete.bash' >> ~/.bashrc && echo 'export TURTLEBOT3_MODEL=burger' >> ~/.bashrc && echo '' >> ~/.bashrc && echo '# Start Ollama server in background if not running' >> ~/.bashrc && echo 'pgrep ollama > /dev/null || ollama serve &> /tmp/ollama.log &' >> ~/.bashrc"
+}
