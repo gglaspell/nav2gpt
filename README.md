@@ -6,9 +6,9 @@
 
 ## Architecture Overview
 
-```
+```text
 Microphone → Whisper (speech-to-text) → Ollama / LLM (intent parsing)
-         → Nav2 /goToPose action server → TurtleBot3 in Gazebo
+         → Nav2 goToPose service → TurtleBot3 in Gazebo
 ```
 
 | Component | Tool |
@@ -51,7 +51,7 @@ code .
 
 When VS Code opens, click **"Reopen in Container"** in the notification (bottom-right), or open the Command Palette (`Ctrl+Shift+P`) and run:
 
-```
+```text
 Dev Containers: Reopen in Container
 ```
 
@@ -67,9 +67,9 @@ This downloads ~4.7 GB and only needs to be done once. The model is stored in th
 
 > **Tip:** For faster CPU inference, use a smaller model instead:
 > ```bash
-> ollama pull llama3.2    # ~2 GB, faster
+> ollama pull llama3.2
 > ```
-> Then update `nav2gpt_ws/src/ros2ai/ros2ai/nav_gpt.py` line 33:
+> Then update `nav2gpt_ws/src/ros2ai/ros2ai/nav_gpt.py` where `OllamaLLM` is created:
 > ```python
 > self.llm = OllamaLLM(model="llama3.2")
 > ```
@@ -77,12 +77,12 @@ This downloads ~4.7 GB and only needs to be done once. The model is stored in th
 ### 4. Build the ROS 2 Workspace
 
 ```bash
-cd /Humble-llm/nav2gpt_ws
+cd /nav2gpt/nav2gpt_ws
 colcon build
 source install/setup.bash
 ```
 
-> **Note:** You will see a harmless `UserWarning: Unknown distribution option: 'tests_require'` — this can be ignored.
+> **Note:** You may see `UserWarning: Unknown distribution option: 'tests_require'`. That warning is harmless.
 
 ---
 
@@ -93,44 +93,49 @@ You need **four terminals** open inside the container. In VS Code, open new term
 ### Terminal 1 — Launch Gazebo + TurtleBot3
 
 ```bash
-source /Humble-llm/nav2gpt_ws/install/setup.bash
+source /nav2gpt/nav2gpt_ws/install/setup.bash
 ros2 launch ros2ai turtlebot3_navigation.launch.py
 ```
 
-Wait until Gazebo and RViz fully load and Nav2 prints `[lifecycle_manager] Configuring...` messages before proceeding.
+Wait until Gazebo and RViz fully load before proceeding.
 
 ### Terminal 2 — Launch Nav2
 
 ```bash
+source /nav2gpt/nav2gpt_ws/install/setup.bash
 ros2 launch ros2ai navigation2.launch.py
 ```
+
+> **Note:** `navigation2.launch.py` includes commented-out `gzserver` and `gzclient` launch actions. Keep them commented, because Gazebo is already started in Terminal 1.
 
 ### Terminal 3 — Start the Nav2 API Server
 
 ```bash
-source /Humble-llm/nav2gpt_ws/install/setup.bash
+source /nav2gpt/nav2gpt_ws/install/setup.bash
 ros2 run ros2ai nav2_api_server
 ```
 
 Expected output:
-```
+
+```text
 [INFO] [nav2_api_server]: Nav2 API Server is ready
 ```
 
 ### Terminal 4 — Start the LLM Voice Node
 
 ```bash
-source /Humble-llm/nav2gpt_ws/install/setup.bash
+source /nav2gpt/nav2gpt_ws/install/setup.bash
 ros2 run ros2ai Nav2Gpt
 ```
 
 Expected output:
-```
+
+```text
 [INFO] [nav_gpt]: connected to goToPose server
 Press Enter to start recording...
 ```
 
-Press **Enter**, speak a command (e.g. *"Drive to the kitchen"*), and press **Enter** again to stop recording. Whisper will transcribe your speech, the LLM will parse the intent, and the robot will navigate to the target location in Gazebo.
+Press **Enter** to begin recording. The node records for a fixed **10 seconds** and then automatically stops. Whisper transcribes the audio, the LLM parses the intent, and the robot navigates to the selected location.
 
 ---
 
@@ -151,21 +156,21 @@ During development, the following pip dependency conflicts were encountered and 
 
 ## Customizing Navigation Locations
 
-Room coordinates are defined in `nav2gpt_ws/src/ros2ai/ros2ai/nav_gpt.py` as a dictionary in the LLM prompt. Edit these to match your Gazebo map:
+Room coordinates are currently hardcoded inside the prompt text in `nav2gpt_ws/src/ros2ai/ros2ai/nav_gpt.py`. Edit the room lines inside the prompt string, for example:
 
 ```python
-locations = {
-    "kitchen":  {"x": -4.0, "y":  4.0, "theta": 180},
-    "bedroom":  {"x":  3.0, "y":  4.0, "theta":   0},
-    "living room": {"x":  0.0, "y": -3.0, "theta":  90},
-    # Add more rooms here
-}
+remember these the coordinates of the kitchen is x: -4, y: 4, theta: 180
+
+the coordinates of the bedroom is x: 3, y: 4, theta: 0
+
+# Add more rooms in the same style, for example:
+# the coordinates of the living room is x: 0, y: -3, theta: 90
 ```
 
 After editing, rebuild:
 
 ```bash
-cd /Humble-llm/nav2gpt_ws
+cd /nav2gpt/nav2gpt_ws
 colcon build
 source install/setup.bash
 ```
@@ -174,30 +179,37 @@ source install/setup.bash
 
 ## Troubleshooting
 
-**`ollama serve` — address already in use**
-Ollama is already running (started automatically). Just use `ollama list` or `ollama pull` directly.
+**`ollama serve` — address already in use**  
+Ollama is already running. Use `ollama list` or `ollama pull` directly.
 
-**`model 'llama3' not found (status code: 404)`**
-The model hasn't been pulled yet. Run `ollama pull llama3`.
+**`model 'llama3' not found (status code: 404)`**  
+The model has not been pulled yet. Run:
 
-**`FP16 is not supported on CPU; using FP32 instead`**
-Harmless warning. Whisper falls back to FP32 when no GPU is present. Transcription still works.
+```bash
+ollama pull llama3
+```
 
-**`colcon build` fails with `option --editable not recognized` or `option --uninstall not recognized`**
-A pip install upgraded `setuptools` above v80. Fix with:
+**`FP16 is not supported on CPU; using FP32 instead`**  
+This warning is harmless. Whisper falls back to FP32 on CPU.
+
+**`colcon build` fails with `option --editable not recognized` or `option --uninstall not recognized`**  
+A pip install likely upgraded `setuptools` too far. Fix with:
+
 ```bash
 pip3 install --user "setuptools<80"
 ```
 
-**Empty transcription after recording**
+**Empty transcription after recording**  
 Check microphone access inside the container:
+
 ```bash
-arecord -l    # list recording devices
-arecord -d 3 test.wav && aplay test.wav   # record 3s test clip
+arecord -l
+arecord -d 3 test.wav && aplay test.wav
 ```
 
-**Map frame missing**
-add a static transform
+**Map frame missing**  
+Add a static transform:
+
 ```bash
 ros2 run tf2_ros static_transform_publisher 0 0 0 0 0 0 map odom
 ```
@@ -206,21 +218,38 @@ ros2 run tf2_ros static_transform_publisher 0 0 0 0 0 0 map odom
 
 ## Project Structure
 
-```
+```text
 nav2gpt/
 ├── .devcontainer/
-│   ├── Dockerfile              # Container image definition
-│   ├── devcontainer.json       # VS Code Dev Container config
-│   └── ros_entrypoint.sh       # Container entrypoint script
+│   ├── Dockerfile
+│   ├── devcontainer.json
+│   └── ros_entrypoint.sh
+├── README.md
 └── nav2gpt_ws/
     └── src/
-        ├── ros2ai/             # Main ROS 2 package
+        ├── ros2ai/
+        │   ├── launch/
+        │   │   ├── navigation2.launch.py
+        │   │   └── turtlebot3_navigation.launch.py
+        │   ├── maps/
+        │   │   ├── house.pgm
+        │   │   └── house.yaml
+        │   ├── resource/
         │   ├── ros2ai/
-        │   │   ├── nav_gpt.py          # LLM voice node (Whisper + Ollama)
-        │   │   └── nav2_api_server.py  # Nav2 goToPose service wrapper
-        │   └── launch/
-        │       └── turtlebot3_navigation.launch.py
-        └── ros2ai_msgs/        # Custom ROS 2 service definitions
+        │   │   ├── __init__.py
+        │   │   ├── nav2_api_server.py
+        │   │   ├── nav_gpt.py
+        │   │   ├── recorded_audio.wav
+        │   │   ├── test.mp3
+        │   │   ├── test_wispher.py
+        │   │   └── whisper_live_test.py
+        │   ├── test/
+        │   ├── package.xml
+        │   ├── setup.cfg
+        │   └── setup.py
+        └── ros2ai_msgs/
+            ├── CMakeLists.txt
+            ├── package.xml
             └── srv/
                 └── Nav2Gpt.srv
 ```
