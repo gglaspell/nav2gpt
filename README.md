@@ -46,7 +46,6 @@ The `.devcontainer/` folder at the repo root contains the `Dockerfile` and `devc
 ### 2. Open in VS Code Dev Container
 
 ```bash
-cd ../..       # back to repo root
 code .
 ```
 
