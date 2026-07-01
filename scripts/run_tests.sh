@@ -20,6 +20,13 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$REPO_ROOT"
 
+# A sourced ROS environment registers pytest plugins (e.g. launch_testing) via
+# setuptools entry points. If pytest runs under a *different* Python than ROS's
+# (e.g. Anaconda) with ROS on PYTHONPATH, autoloading those plugins crashes at
+# startup (ModuleNotFoundError: lark) before any test is collected. We use no
+# third-party pytest plugins, so disable autoload to stay isolated from ROS.
+export PYTEST_DISABLE_PLUGIN_AUTOLOAD=1
+
 # --- identity of this run ----------------------------------------------------
 BRANCH="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo unknown)"
 SHA="$(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
