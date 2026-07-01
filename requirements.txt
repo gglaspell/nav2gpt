@@ -1,0 +1,26 @@
+# Python runtime dependencies for nav2gpt (the ros2ai package).
+#
+# These mirror the pip install in .devcontainer/Dockerfile so a bare ROS 2
+# Humble machine can reproduce the container's Python environment with:
+#
+#     pip3 install -r requirements.txt
+#
+# NOTE: ROS 2 packages (rclpy, nav2_simple_commander, cv_bridge, geometry_msgs,
+# std_srvs, sensor_msgs, tf_transformations, ...) are NOT pip-installable here —
+# they come from apt (ros-humble-*) / your sourced ROS workspace. See the
+# apt-get list in .devcontainer/Dockerfile. Ollama is installed separately.
+#
+# The version pins below are deliberate; see the "Known Issues" table in
+# README.md for why each one matters (NumPy 1.x ABI, colcon/setuptools, etc.).
+
+numpy==1.26.4                    # 2.x breaks scipy/opencv/torch ABI here
+torch==2.1.2                     # newer forces NumPy 2.x
+transforms3d>=0.4.2              # used by tf_transformations
+scipy>=1.11,<1.14                # wav I/O; compiled against NumPy 1.x
+opencv-python-headless==4.8.1.78 # 4.13 requires NumPy >= 2
+openai-whisper==20240930         # speech-to-text (needs ffmpeg, apt)
+sounddevice                      # mic capture (needs portaudio, apt)
+langchain                        # LLM orchestration
+langchain-community              # community integrations
+langchain-ollama                 # OllamaLLM (replaces deprecated community Ollama)
+setuptools<80                    # 81+ removes --editable, breaks colcon build

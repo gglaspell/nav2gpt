@@ -16,3 +16,9 @@ log/
 # Optional: keep package-local generated audio out of source control
 nav2gpt_ws/src/ros2ai/ros2ai/recorded_audio.wav
 nav2gpt_ws/src/ros2ai/ros2ai/test.mp3
+
+# Local planning / working notes — never pushed upstream
+.project/
+
+# Test harness bookkeeping
+.pytest_cache/

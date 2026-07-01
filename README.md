@@ -84,6 +84,14 @@ source install/setup.bash
 
 > **Note:** You may see `UserWarning: Unknown distribution option: 'tests_require'`. That warning is harmless.
 
+> **Running outside the dev container?** The Dev Container installs all Python
+> dependencies for you. On a bare ROS 2 Humble machine, install them with:
+> ```bash
+> pip3 install -r requirements.txt
+> ```
+> ROS packages themselves (rclpy, Nav2, cv_bridge, …) still come from apt — see
+> the `ros-humble-*` list in `.devcontainer/Dockerfile`.
+
 ---
 
 ## Running the Project
@@ -136,6 +144,27 @@ Press Enter to start recording...
 ```
 
 Press **Enter** to begin recording. The node records for a fixed **10 seconds** and then automatically stops. Whisper transcribes the audio, the LLM parses the intent, and the robot navigates to the selected location.
+
+---
+
+## Running the Tests
+
+Tests live in `tests/` (one `test_<feature>.py` per feature). Pure-logic tests
+run anywhere; tests needing a live ROS graph skip themselves when ROS isn't
+available, so the suite is safe to run on any machine.
+
+```bash
+pip3 install -r requirements-dev.txt   # once, installs pytest
+./scripts/run_tests.sh                  # runs the suite, writes reports/<branch>_<timestamp>.md
+```
+
+`run_tests.sh` always writes a Markdown report (even if tests fail or pytest/ROS
+are missing — the environment is recorded in the report). To publish that report
+back to the branch on GitHub:
+
+```bash
+./scripts/push_report.sh                # commits + pushes the newest report
+```
 
 ---
 
