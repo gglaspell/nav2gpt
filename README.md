@@ -183,6 +183,16 @@ so you can watch the robot actually move. Ctrl-C tears it all down. Each feature
 branch hones the `feature_demo_hint()` in that script to say what to do and what
 to watch for.
 
+### Guided integration test
+
+`scripts/integration_test.sh` is an interactive, automated walk-through of the
+"Running the Project" steps above: it opens a terminal per stack component,
+pauses at each step with instructions, then asks you to confirm the robot did
+the right thing and records a PASS/FAIL integration report. It skips cleanly
+(writing a SKIP report) when there's no graphical session or the workspace isn't
+built. Each feature branch hones `feature_integration()` with the checkpoints
+and pass/fail question for its feature.
+
 ---
 
 ## Dependency Notes & Known Fixes
