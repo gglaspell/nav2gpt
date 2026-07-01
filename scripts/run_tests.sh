@@ -65,10 +65,27 @@ else
   TEST_EXIT=0
 fi
 
-if [ "$TEST_EXIT" -eq 0 ]; then
-  RESULT="PASS ✅"
+# --- run the functional comparison against main ------------------------------
+# Part of the default harness (honed per feature via feature_check()). Proves
+# the branch's effect on robot behavior relative to main.
+COMPARE_LOG="$(mktemp)"
+if [ -x "$REPO_ROOT/scripts/compare_with_main.sh" ]; then
+  echo
+  echo "Comparing against main ..."
+  "$REPO_ROOT/scripts/compare_with_main.sh" 2>&1 | tee "$COMPARE_LOG"
+  COMPARE_EXIT=${PIPESTATUS[0]}
 else
-  RESULT="FAIL ❌ (pytest exit $TEST_EXIT)"
+  echo "compare_with_main.sh not present — skipping comparison" | tee "$COMPARE_LOG"
+  COMPARE_EXIT=0
+fi
+
+# --- overall result (pytest AND comparison must pass) ------------------------
+if [ "$TEST_EXIT" -eq 0 ] && [ "$COMPARE_EXIT" -eq 0 ]; then
+  RESULT="PASS ✅"
+  OVERALL_EXIT=0
+else
+  RESULT="FAIL ❌ (pytest exit $TEST_EXIT, compare exit $COMPARE_EXIT)"
+  OVERALL_EXIT=1
 fi
 
 # --- write the report --------------------------------------------------------
@@ -92,15 +109,22 @@ fi
   echo '```'
   cat "$LOG_FILE"
   echo '```'
+  echo
+  echo "## main-vs-branch functional comparison"
+  echo
+  echo '```'
+  cat "$COMPARE_LOG"
+  echo '```'
 } > "$REPORT"
 
-rm -f "$LOG_FILE"
+rm -f "$LOG_FILE" "$COMPARE_LOG"
 
 echo
 echo "----------------------------------------------------------------"
 echo "Result:  $RESULT"
 echo "Report:  $REPORT"
 echo "Next:    ./scripts/push_report.sh   (pushes this report to GitHub)"
+echo "Visual:  ./scripts/debug_visual.sh  (watch the robot on the Linux box)"
 echo "----------------------------------------------------------------"
 
-exit "$TEST_EXIT"
+exit "$OVERALL_EXIT"

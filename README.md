@@ -158,13 +158,30 @@ pip3 install -r requirements-dev.txt   # once, installs pytest
 ./scripts/run_tests.sh                  # runs the suite, writes reports/<branch>_<timestamp>.md
 ```
 
-`run_tests.sh` always writes a Markdown report (even if tests fail or pytest/ROS
-are missing — the environment is recorded in the report). To publish that report
-back to the branch on GitHub:
+`run_tests.sh` runs the pytest suite **and** a functional comparison against
+`main` (`compare_with_main.sh`), folding both into one Markdown report. A report
+is always written — even if tests fail or pytest/ROS are missing (the
+environment is recorded in the report). To publish it back to the branch:
 
 ```bash
 ./scripts/push_report.sh                # commits + pushes the newest report
 ```
+
+### Comparing a branch against main
+
+`scripts/compare_with_main.sh` categorizes what a feature branch changes vs
+`main` (robot code vs tooling/docs) and runs a per-feature functional check
+against both. A tooling-only branch shows zero functional changes — proving
+parity with `main`. Each feature branch hones the `feature_check()` function in
+that script to probe the specific behavior it adds.
+
+### Watching it run (visual debug)
+
+`scripts/debug_visual.sh` brings the whole stack up on the Linux machine —
+Gazebo + Nav2 + API server in the background, the voice node in the foreground —
+so you can watch the robot actually move. Ctrl-C tears it all down. Each feature
+branch hones the `feature_demo_hint()` in that script to say what to do and what
+to watch for.
 
 ---
 
