@@ -167,6 +167,13 @@ environment is recorded in the report). To publish it back to the branch:
 ./scripts/push_report.sh                # commits + pushes the newest report
 ```
 
+### Building the workspace (with a captured log)
+
+`scripts/build_ws.sh` runs `colcon build` in `nav2gpt_ws` and tees the full
+output into a build report under `reports/`, so build failures are captured and
+publishable alongside the test reports. It skips cleanly (writing a SKIP report)
+on machines without colcon/ROS.
+
 ### Comparing a branch against main
 
 `scripts/compare_with_main.sh` categorizes what a feature branch changes vs
