@@ -167,6 +167,11 @@ environment is recorded in the report). To publish it back to the branch:
 ./scripts/push_report.sh                # commits + pushes the newest report
 ```
 
+> **Run tests inside the Dev Container.** The harness targets ROS 2 **Humble**,
+> which is what the Dev Container provides. Running `colcon`/tests on a host with
+> a different ROS distro (e.g. Jazzy) will not work — `build_ws.sh` detects a
+> distro mismatch and flags it in the build report.
+
 ### Building the workspace (with a captured log)
 
 `scripts/build_ws.sh` runs `colcon build` in `nav2gpt_ws` and tees the full

@@ -54,6 +54,23 @@ command -v colcon >/dev/null 2>&1 || { write_skip_report "colcon not installed (
 [ -n "$ROS_SETUP" ] || { write_skip_report "no ROS 2 install found under /opt/ros/*"; exit 0; }
 [ -d "$WS/src" ]   || { write_skip_report "no workspace src at $WS/src"; exit 0; }
 
+# --- distro guard: this repo targets the distro in the devcontainer Dockerfile.
+# Building against a different distro (e.g. Jazzy on the host instead of the
+# Humble container) is the classic failure — flag it loudly and in the report.
+EXPECTED_DISTRO="$(grep -oiE 'osrf/ros:[a-z]+' "$REPO_ROOT/.devcontainer/Dockerfile" 2>/dev/null | head -1 | sed 's#.*:##')"
+[ -n "$EXPECTED_DISTRO" ] || EXPECTED_DISTRO="humble"
+CUR_DISTRO="${ROS_DISTRO:-$(basename "$(dirname "$ROS_SETUP")")}"
+DISTRO_ROW="\`$CUR_DISTRO\` (matches target)"
+if [ "$CUR_DISTRO" != "$EXPECTED_DISTRO" ]; then
+  DISTRO_ROW="⚠️ \`$CUR_DISTRO\` — but repo targets \`$EXPECTED_DISTRO\` (run in the devcontainer!)"
+  echo "================================================================"
+  echo " ⚠️  WRONG ROS DISTRO"
+  echo " Building against '$CUR_DISTRO' but this repo targets '$EXPECTED_DISTRO'."
+  echo " This will almost certainly fail. Open the Humble devcontainer and run"
+  echo " the paste in its terminal. Building anyway so the log is captured..."
+  echo "================================================================"
+fi
+
 # --- build -------------------------------------------------------------------
 echo "Building workspace ($WS) against $ROS_SETUP ..."
 LOG_FILE="$(mktemp)"
@@ -80,6 +97,7 @@ LOG_LINES="$(wc -l < "$LOG_FILE" | tr -d ' ')"
   echo "| Run at (UTC) | $TS |"
   echo "| Host | $HOSTNAME_STR |"
   echo "| ROS underlay | $ROS_SETUP |"
+  echo "| Distro check | $DISTRO_ROW |"
   echo "| colcon | $(colcon version-check 2>/dev/null | head -1 || echo present) |"
   echo
   echo "## colcon build output"
