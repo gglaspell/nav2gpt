@@ -52,10 +52,17 @@ is_functional() {   # is_functional <path> -> 0 if it affects robot behavior
 #
 feature_check() {
   local tree="$1"
-  # Content hash of the committed robot source = a proxy for "does the robot
-  # code differ?". Uses git's own tree object id: deterministic, portable (no
-  # sha1sum/shasum dependency), and reflects committed content exactly.
-  git -C "$tree" rev-parse HEAD:nav2gpt_ws/src 2>/dev/null || echo "no-robot-source"
+  # Content hash of every FUNCTIONAL_PREFIXES path = a proxy for "does the
+  # robot's actual runtime behavior differ?". Uses git's own tree object ids
+  # (deterministic, portable, no sha1sum/shasum dependency). Must cover the
+  # same paths as FUNCTIONAL_PREFIXES above, or a change there won't show up
+  # here and Part 1/Part 2 will disagree.
+  local pre id
+  for pre in "${FUNCTIONAL_PREFIXES[@]:-}"; do
+    [ -n "$pre" ] || continue
+    id="$(git -C "$tree" rev-parse "HEAD:${pre%/}" 2>/dev/null)"
+    [ -n "$id" ] && echo "$pre=$id"
+  done
 }
 # ─────────────────────────────────────────────────────────────────────────────
 

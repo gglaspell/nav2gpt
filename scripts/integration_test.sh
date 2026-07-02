@@ -4,15 +4,18 @@
 #
 # Walks the README's "Running the Project" steps on the Linux box: opens a
 # terminal window per stack component (Gazebo, Nav2, API server, voice node),
-# pauses at each step with an instruction, then asks you to confirm whether the
-# robot actually did the right thing. The verdict + your notes are written to a
-# report under reports/ (pushed by push_report.sh, same as the automated suite).
+# pauses at each step with an instruction, snaps a screenshot when you confirm
+# it, then asks you to confirm whether the robot actually did the right thing.
+# The verdict + your notes + all screenshots are written under reports/ (pushed
+# by push_report.sh, same as the automated suite) — handy documentation for
+# writeups/slideshows, not just a pass/fail signal.
 #
 #   ./scripts/integration_test.sh
 #
 # It SKIPS cleanly (writing a SKIP report, exit 0) when it can't run — no display,
 # no TTY, ROS not installed, or workspace not built — so it's safe inside the
-# universal paste on any machine.
+# universal paste on any machine. Even when skipped, it still generates the
+# branch-graph poster below (that one needs no display).
 #
 # ─────────────────────────────────────────────────────────────────────────────
 # PER-FEATURE: hone feature_integration() below to add the checkpoints and the
@@ -32,7 +35,11 @@ HOSTNAME_STR="$(hostname 2>/dev/null || echo unknown)"
 : "${TURTLEBOT3_MODEL:=waffle}"; export TURTLEBOT3_MODEL
 
 REPORT_DIR="$REPO_ROOT/reports"; mkdir -p "$REPORT_DIR"
-REPORT="$REPORT_DIR/$(echo "$BRANCH" | tr '/ ' '__')_integration_${TS}.md"
+SLUG="$(echo "$BRANCH" | tr '/ ' '__')"
+REPORT="$REPORT_DIR/${SLUG}_integration_${TS}.md"
+SHOT_DIR="$REPORT_DIR/screenshots/${SLUG}_${TS}"
+SHOTS=()          # captured screenshot paths (for the report + contact sheet)
+SHOT_N=0
 
 # --- resolve ROS + workspace setup files -------------------------------------
 if [ -n "${ROS_DISTRO:-}" ] && [ -f "/opt/ros/$ROS_DISTRO/setup.bash" ]; then
@@ -42,7 +49,83 @@ else
 fi
 WS_SETUP="$REPO_ROOT/nav2gpt_ws/install/setup.bash"
 
+# --- screenshot capture -------------------------------------------------------
+# capture_screenshot <label> [wm-class candidates...]
+# Best-effort: tries to grab the named window (by X11 WM_CLASS, most reliable
+# for Gazebo/RViz), falls back to a full-screen grab, and silently no-ops if
+# ImageMagick's `import` isn't installed. Never fails the run.
+capture_screenshot() {
+  local label="$1"; shift
+  command -v import >/dev/null 2>&1 || { echo "   (screenshot skipped: install imagemagick for slideshow captures)"; return 0; }
+  mkdir -p "$SHOT_DIR"
+  SHOT_N=$((SHOT_N + 1))
+  local out="$SHOT_DIR/$(printf '%02d' "$SHOT_N")-${label}.png"
+  local win=""
+  if command -v xdotool >/dev/null 2>&1; then
+    for cls in "$@"; do
+      win="$(xdotool search --onlyvisible --class "$cls" 2>/dev/null | head -1)"
+      [ -n "$win" ] && break
+    done
+  fi
+  if [ -n "$win" ] && import -window "$win" "$out" 2>/dev/null; then
+    echo "   screenshot: ${out#$REPORT_DIR/}"
+  elif import -window root "$out" 2>/dev/null; then
+    echo "   screenshot (full desktop — target window not found): ${out#$REPORT_DIR/}"
+  else
+    echo "   (screenshot capture failed, continuing)"
+    return 0
+  fi
+  SHOTS+=("$out")
+}
+
+# Bonus artifact: a "poster" of the branch-per-feature git graph. Needs no
+# display/TTY/ROS, so it's generated unconditionally — nice slideshow material
+# showing the actual branching workflow, not just a screenshot of the robot.
+capture_branch_graph() {
+  command -v convert >/dev/null 2>&1 || return 0
+  local graph_txt graph_png font
+  graph_txt="$(git log --all --graph --oneline --decorate -n 40 2>/dev/null)"
+  [ -n "$graph_txt" ] || return 0
+  mkdir -p "$SHOT_DIR"
+  graph_png="$SHOT_DIR/00-branch-graph.png"
+  # Font availability varies wildly by machine/ImageMagick build. Try common
+  # registered names first (what a plain `apt install imagemagick` on Ubuntu
+  # resolves), then a few likely absolute font file paths (Linux + macOS), then
+  # ImageMagick's own default. First one that renders wins; if all fail, skip
+  # the bonus silently — never breaks the run.
+  for font in \
+    "DejaVu-Sans-Mono" "Courier" "Courier-New" "Menlo" \
+    "/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf" \
+    "/System/Library/Fonts/Supplemental/Courier New.ttf" \
+    "none"
+  do
+    if [ "$font" = "none" ]; then
+      convert -background '#1e1e2e' -fill '#a6e3a1' -pointsize 16 \
+        -size 1400x -gravity NorthWest label:"$graph_txt" "$graph_png" 2>/dev/null
+    else
+      convert -background '#1e1e2e' -fill '#a6e3a1' -font "$font" -pointsize 16 \
+        -size 1400x -gravity NorthWest label:"$graph_txt" "$graph_png" 2>/dev/null
+    fi
+    if [ $? -eq 0 ]; then
+      echo "   branch graph poster: ${graph_png#$REPORT_DIR/}"
+      SHOTS+=("$graph_png")
+      return 0
+    fi
+  done
+}
+
+# Bonus artifact: one contact-sheet image combining every screenshot from this
+# run — a single "hero image" that's easy to drop into a slide.
+capture_contact_sheet() {
+  command -v montage >/dev/null 2>&1 || return 0
+  [ "${#SHOTS[@]}" -ge 2 ] || return 0
+  local sheet="$SHOT_DIR/99-contact-sheet.png"
+  montage "${SHOTS[@]:-}" -tile 2x -geometry 480x360+8+8 -background '#1e1e2e' "$sheet" 2>/dev/null \
+    && { echo "   contact sheet: ${sheet#$REPORT_DIR/}"; SHOTS+=("$sheet"); }
+}
+
 write_skip_report() {   # write_skip_report <reason>
+  capture_branch_graph
   {
     echo "# Integration report — \`$BRANCH\`"
     echo
@@ -54,6 +137,12 @@ write_skip_report() {   # write_skip_report <reason>
     echo "| Commit | \`$SHA\` |"
     echo "| Run at (UTC) | $TS |"
     echo "| Host | $HOSTNAME_STR |"
+    if [ "${#SHOTS[@]}" -gt 0 ]; then
+      echo
+      echo "## Artifacts"
+      echo
+      for s in "${SHOTS[@]:-}"; do echo "![${s##*/}](${s#$REPORT_DIR/})"; done
+    fi
   } > "$REPORT"
   echo "Integration test SKIPPED: $1"
   echo "Report: $REPORT"
@@ -117,7 +206,7 @@ teardown() {
   echo
   read -r -p "Press Enter to shut the stack down... "
   echo "Tearing down..."
-  for p in "${LAUNCH_PATTERNS[@]}"; do pkill -f "$p" 2>/dev/null; done
+  for p in "${LAUNCH_PATTERNS[@]:-}"; do [ -n "$p" ] && pkill -f "$p" 2>/dev/null; done
   pkill -f gzserver 2>/dev/null; pkill -f gzclient 2>/dev/null
   pkill -f 'nav2_api_server' 2>/dev/null; pkill -f 'nav_gpt' 2>/dev/null
   echo "Done. (Close any leftover terminal windows manually.)"
@@ -131,13 +220,17 @@ echo "================================================================"
 echo "This walks the README launch steps. Follow each prompt, then confirm."
 echo
 
+capture_branch_graph
+
 record "Terminal 1 — Gazebo + TurtleBot3"
 open_stack_terminal "1-gazebo" ros2 launch ros2ai turtlebot3_navigation.launch.py
 pause "Wait until Gazebo (and RViz) fully load and the house + robot are visible."
+capture_screenshot "gazebo-loaded" gzclient Gazebo
 
 record "Terminal 2 — Nav2"
 open_stack_terminal "2-nav2" ros2 launch ros2ai navigation2.launch.py
 pause "Wait until Nav2 lifecycle nodes are active (no more 'configuring' spam)."
+capture_screenshot "nav2-active" rviz2 RViz rviz
 
 record "Terminal 3 — Nav2 API server"
 open_stack_terminal "3-apiserver" ros2 run ros2ai nav2_api_server
@@ -146,8 +239,11 @@ pause "Confirm the API server started without errors."
 record "Terminal 4 — LLM voice node"
 open_stack_terminal "4-voice" ros2 run ros2ai Nav2Gpt
 pause "Wait until the voice node prints 'connected to goToPose server'."
+capture_screenshot "stack-up" gzclient Gazebo
 
 feature_integration
+capture_screenshot "feature-result" gzclient Gazebo
+capture_contact_sheet
 
 # --- write the report --------------------------------------------------------
 if [ "${FEATURE_VERDICT:-no}" = "yes" ]; then
@@ -172,12 +268,18 @@ fi
   echo
   echo "## Steps walked"
   echo
-  for s in "${STEP_LOG[@]}"; do echo "- $s"; done
+  for s in "${STEP_LOG[@]:-}"; do [ -n "$s" ] && echo "- $s"; done
   echo
   echo "## Feature verdict"
   echo
   echo "- Robot navigated correctly: **${FEATURE_VERDICT:-no}**"
   echo "- Notes: ${FEATURE_NOTES:-(none)}"
+  if [ "${#SHOTS[@]}" -gt 0 ]; then
+    echo
+    echo "## Artifacts (screenshots / posters — slideshow material)"
+    echo
+    for s in "${SHOTS[@]:-}"; do echo "![${s##*/}](${s#$REPORT_DIR/})"; done
+  fi
 } > "$REPORT"
 
 echo

@@ -59,8 +59,8 @@ PIDS=()
 cleanup() {
   echo
   echo "Shutting down stack..."
-  for pid in "${PIDS[@]}"; do
-    kill "$pid" 2>/dev/null
+  for pid in "${PIDS[@]:-}"; do
+    [ -n "$pid" ] && kill "$pid" 2>/dev/null
   done
   wait 2>/dev/null
   echo "Logs kept in: $LOG_DIR"
