@@ -29,6 +29,12 @@ RUN rosdep update && \
     libportaudio2 \
     libsndfile1 \
     ffmpeg \
+    # GUI/terminal tools: xterm opens real windows for integration_test.sh's
+    # per-stack-component terminals (instead of falling back to background
+    # mode); imagemagick + xdotool back its screenshot/window-capture feature
+    xterm \
+    imagemagick \
+    xdotool \
     # ROS packages (original set preserved)
     ros-humble-nav2-bringup \
     ros-humble-nav2-simple-commander \

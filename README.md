@@ -204,11 +204,28 @@ to watch for.
 
 `scripts/integration_test.sh` is an interactive, automated walk-through of the
 "Running the Project" steps above: it opens a terminal per stack component,
-pauses at each step with instructions, then asks you to confirm the robot did
-the right thing and records a PASS/FAIL integration report. It skips cleanly
-(writing a SKIP report) when there's no graphical session or the workspace isn't
-built. Each feature branch hones `feature_integration()` with the checkpoints
-and pass/fail question for its feature.
+pauses at each step with instructions (snapping a screenshot when you confirm
+it — see below), then asks you to confirm the robot did the right thing and
+records a PASS/FAIL integration report. It skips cleanly (writing a SKIP
+report) when there's no graphical session or the workspace isn't built. Each
+feature branch hones `feature_integration()` with the checkpoints and
+pass/fail question for its feature.
+
+It opens real terminal windows via `xterm` (installed in the devcontainer
+image). If you're on a container built **before** `xterm`/`imagemagick`/
+`xdotool` were added to the Dockerfile, it falls back to running each
+component in the background with a log file — rebuild the container
+("Dev Containers: Rebuild Container") to get real windows and screenshots.
+
+### Slideshow-ready artifacts
+
+Every guided run captures documentation-quality visuals under
+`reports/screenshots/<branch>_<timestamp>/`, embedded in the integration
+report: a screenshot of Gazebo/RViz at each confirmed step, a rendered
+"branch graph" poster of the project's git history (generated even on a
+skipped run — no display needed), and a contact-sheet collage combining a
+run's screenshots into one image. All best-effort — missing tools just skip
+that capture rather than failing the run.
 
 ---
 
