@@ -62,7 +62,7 @@ if command -v code >/dev/null 2>&1; then
   echo "VS Code opened. Next:"
   echo "  1. Command Palette -> 'Dev Containers: Reopen in Container'"
   echo "  2. Wait for the first build (10-20 min)"
-  echo "  3. In the container terminal, once: ollama pull llama3"
-  echo "  4. Then run:  bash scripts/ci.sh"
+  echo "     (Ollama + the llama3 model are pulled automatically during this build.)"
+  echo "  3. In the container terminal, run:  bash scripts/ci.sh"
   echo "----------------------------------------------------------------"
 fi

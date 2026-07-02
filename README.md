@@ -57,13 +57,18 @@ Dev Containers: Reopen in Container
 
 The first build takes **10–20 minutes** — it installs ROS 2 Humble, Nav2, Gazebo, Ollama, Whisper, and all Python dependencies.
 
-### 3. Pull the Ollama Model
+### 3. Ollama Model (automatic)
+
+The container's `postCreateCommand` (`.devcontainer/post_create.sh`) starts the
+Ollama server and pulls `llama3` (~4.7 GB) for you on first build — no manual
+step needed. It's stored in the persistent `ollama-models` Docker volume and
+survives container rebuilds, so it's only ever downloaded once. If the pull
+fails (e.g. no network during the build), it prints a warning and you can run
+it yourself:
 
 ```bash
 ollama pull llama3
 ```
-
-This downloads ~4.7 GB and only needs to be done once. The model is stored in the persistent `ollama-models` Docker volume and survives container rebuilds.
 
 > **Tip:** For faster CPU inference, use a smaller model instead:
 > ```bash
