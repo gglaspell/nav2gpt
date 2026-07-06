@@ -20,6 +20,15 @@ import whisper
 import time
 import json
 
+# --- DEV MODE -----------------------------------------------------------
+# Lets you press 'x' at the recording prompt to skip the mic + Whisper and
+# inject a known-good transcript instead (handy when you can't speak out
+# loud, e.g. testing in a quiet office). MUST be flipped to False before
+# merging this branch into main.
+DEV_MODE_CANNED_TRANSCRIPT = True
+CANNED_TRANSCRIPT = "Go to the kitchen"
+# --------------------------------------------------------------------------
+
 class NavGpt(Node):
     def __init__(self):
         super().__init__("nav_gpt")
@@ -110,15 +119,26 @@ def main(args=None):
     rclpy.init(args=args)
     try:
         node = NavGpt()
-        input("Press Enter to start recording...")
-        filename = "recorded_audio.wav"
-        duration = 10  # seconds
-        node.record_audio(filename, duration)
-        
-        print("Transcribing...")
-        model = whisper.load_model("base")
-        result = model.transcribe(filename)
-        print("Transcription:", result["text"])
+
+        if DEV_MODE_CANNED_TRANSCRIPT:
+            choice = input("Press Enter to start recording, or 'x' to inject a canned transcript... ")
+        else:
+            choice = input("Press Enter to start recording...")
+
+        if DEV_MODE_CANNED_TRANSCRIPT and choice.strip().lower() == "x":
+            transcript_text = CANNED_TRANSCRIPT
+            print(f"[DEV MODE] Using canned transcript: {transcript_text!r}")
+        else:
+            filename = "recorded_audio.wav"
+            duration = 10  # seconds
+            node.record_audio(filename, duration)
+
+            print("Transcribing...")
+            model = whisper.load_model("base")
+            transcription = model.transcribe(filename)
+            transcript_text = transcription["text"]
+            print("Transcription:", transcript_text)
+
         prompt = """
         Use this JSON schema to achieve the user's goals:\n\
                 {
@@ -174,7 +194,7 @@ def main(args=None):
                         
         """
 
-        prompt += result["text"]
+        prompt += transcript_text
 
         prompt += """
         

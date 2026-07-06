@@ -189,12 +189,17 @@ record() { STEP_LOG+=("$1"); echo "   • $1"; }
 
 # ── FEATURE HOOK ─────────────────────────────────────────────────────────────
 # Extra checkpoints + the pass/fail question specific to this branch. dev-setup
-# adds no robot behavior, so its "feature" is baseline parity with main.
+# is tooling-only PLUS one opt-in dev convenience in nav_gpt.py: pressing 'x'
+# at the recording prompt injects a canned transcript instead of using the mic
+# (DEV_MODE_CANNED_TRANSCRIPT — must be flipped False before merging to main;
+# tracked in .project/ROADMAP.md's merge checklist). The robot's actual
+# navigation behavior is otherwise identical to main.
 feature_integration() {
   echo
   echo ">> FEATURE CHECK: feature/$BRANCH"
-  echo "   dev-setup adds only tooling — the robot must behave exactly like main."
-  echo "   In the VOICE NODE window: press Enter, then say \"go to the kitchen\"."
+  echo "   dev-setup is tooling-only plus a dev-mode canned-transcript shortcut."
+  echo "   In the VOICE NODE window: press 'x' + Enter for the canned transcript"
+  echo "   (\"go to the kitchen\"), or press Enter then speak it yourself."
   pause "Watch Gazebo: the robot should plan a path and drive to the kitchen."
   ask_yn "Did the robot navigate to the goal correctly (same as main)?"
   FEATURE_VERDICT="$REPLY_YN"
