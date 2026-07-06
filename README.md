@@ -125,10 +125,12 @@ ros2 launch ros2ai navigation2.launch.py
 
 ```bash
 source /nav2gpt/nav2gpt_ws/install/setup.bash
-./scripts/set_initial_pose.sh          # defaults to the measured house spawn pose (-0.07, -0.56)
+./scripts/set_initial_pose.sh          # auto-detects the real spawn pose from Gazebo
 ```
 
-Required for localization: until AMCL has an initial pose it never publishes the `map → odom` transform, so Nav2 reports `frame [map] does not exist`, navigation goals never resolve, and the API server's service call blocks. You can instead click **2D Pose Estimate** in RViz and drag the arrow onto the robot's true location — do this if the robot spawns somewhere other than the default.
+`set_initial_pose.sh` reads the robot's **actual** spawn pose live from Gazebo (via `scripts/get_spawn_pose.py`) and seeds AMCL with it — no hardcoded guess. You can still override with explicit coordinates (`./scripts/set_initial_pose.sh <x> <y>`) or click **2D Pose Estimate** in RViz.
+
+Required for localization: until AMCL has an initial pose it never publishes the `map → odom` transform, so Nav2 reports `frame [map] does not exist`, navigation goals never resolve, and the API server's service call blocks.
 
 > A `static_transform_publisher map odom` will silence the "frame missing" error, but it *fakes* localization — the costmap ends up offset from reality and the robot paths around walls that aren't there. Seed AMCL instead.
 
