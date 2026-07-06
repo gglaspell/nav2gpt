@@ -207,16 +207,79 @@ feature_integration() {
 }
 # ─────────────────────────────────────────────────────────────────────────────
 
-teardown() {
+COMPLETED=0     # set to 1 once feature_integration returns a verdict
+FINALIZED=0     # guard so finalize() only runs once
+
+# finalize() writes the report + contact sheet and grabs a final screenshot.
+# It runs from the EXIT trap, so the data for every stage reached so far is
+# ALWAYS collected — whether you pressed Enter through the whole run, Ctrl-C'd
+# partway, or a stage errored out. Idempotent.
+finalize() {
+  [ "$FINALIZED" = "1" ] && return 0
+  FINALIZED=1
+
+  # Grab whatever's on screen at exit, then a combined contact sheet.
+  capture_screenshot "final-state" gzclient Gazebo rviz2 RViz
+  capture_contact_sheet
+
+  local result
+  if [ "$COMPLETED" != "1" ]; then
+    result="INCOMPLETE ⏹️ (run ended before the feature verdict)"
+  elif [ "${FEATURE_VERDICT:-no}" = "yes" ]; then
+    result="PASS ✅"
+  else
+    result="FAIL ❌"
+  fi
+
+  {
+    echo "# Integration report — \`$BRANCH\`"
+    echo
+    echo "| Field | Value |"
+    echo "|-------|-------|"
+    echo "| Result | **$result** |"
+    echo "| Branch | \`$BRANCH\` |"
+    echo "| Commit | \`$SHA\` |"
+    echo "| Run at (UTC) | $TS |"
+    echo "| Host | $HOSTNAME_STR |"
+    echo "| ROS setup | $ROS_SETUP |"
+    echo "| Model | $TURTLEBOT3_MODEL |"
+    echo "| Terminal | ${TERM_EMU:-background} |"
+    echo
+    echo "## Steps walked"
+    echo
+    for s in "${STEP_LOG[@]:-}"; do [ -n "$s" ] && echo "- $s"; done
+    echo
+    echo "## Feature verdict"
+    echo
+    echo "- Robot navigated correctly: **${FEATURE_VERDICT:-(not reached)}**"
+    echo "- Notes: ${FEATURE_NOTES:-(none)}"
+    if [ "${#SHOTS[@]}" -gt 0 ]; then
+      echo
+      echo "## Artifacts (screenshots / posters — slideshow material)"
+      echo
+      for s in "${SHOTS[@]:-}"; do [ -n "$s" ] && echo "![${s##*/}](${s#$REPORT_DIR/})"; done
+    fi
+  } > "$REPORT"
+
   echo
-  read -r -p "Press Enter to shut the stack down... "
-  echo "Tearing down..."
+  echo "----------------------------------------------------------------"
+  echo "Integration result: $result"
+  echo "Report: $REPORT   (artifacts: ${#SHOTS[@]})"
+  echo "----------------------------------------------------------------"
+}
+
+teardown() {
   for p in "${LAUNCH_PATTERNS[@]:-}"; do [ -n "$p" ] && pkill -f "$p" 2>/dev/null; done
   pkill -f gzserver 2>/dev/null; pkill -f gzclient 2>/dev/null
   pkill -f 'nav2_api_server' 2>/dev/null; pkill -f 'nav_gpt' 2>/dev/null
-  echo "Done. (Close any leftover terminal windows manually.)"
+  pkill -f 'static_transform_publisher' 2>/dev/null
 }
-trap 'teardown' EXIT
+
+# Always finalize (collect data) first, then tear the stack down — even on Ctrl-C.
+trap 'finalize; teardown' EXIT
+# Turn Ctrl-C / kill into a clean exit so the EXIT trap always fires and the
+# report + screenshots collected so far are never lost.
+trap 'exit 130' INT TERM
 
 echo "================================================================"
 echo " nav2gpt guided integration — branch: $BRANCH  (model: $TURTLEBOT3_MODEL)"
@@ -237,13 +300,13 @@ open_stack_terminal "2-nav2" ros2 launch ros2ai navigation2.launch.py
 pause "Wait until Nav2 lifecycle nodes are active (no more 'configuring' spam)."
 capture_screenshot "nav2-active" rviz2 RViz rviz
 
-# Without a map->odom transform Nav2 has no localization: TF throws "frame does
-# not exist" and every goal hangs forever (which also blocks the API server's
-# service call). README documents this under "Map frame missing". Publish it so
-# navigation goals resolve. It must keep running, so it's its own component.
-record "Static transform map->odom (fixes 'frame [map] does not exist')"
-open_stack_terminal "2b-tf" ros2 run tf2_ros static_transform_publisher 0 0 0 0 0 0 map odom
-pause "Give it a second to start publishing map->odom."
+# Localize: AMCL publishes map->odom only after it gets an initial pose. Without
+# it, TF has no 'map' frame (goals hang) OR localization is wrong (robot plans
+# around phantom walls). set_initial_pose.sh seeds AMCL at the robot's spawn.
+record "Localization — seed AMCL initial pose"
+open_stack_terminal "2b-initpose" bash "$REPO_ROOT/scripts/set_initial_pose.sh"
+pause "In RViz, confirm 'Localization' is no longer 'unknown' and the robot sits on the map correctly. (Or use RViz '2D Pose Estimate' to nudge it.)"
+capture_screenshot "localized" rviz2 RViz rviz
 
 record "Terminal 3 — Nav2 API server"
 open_stack_terminal "3-apiserver" ros2 run ros2ai nav2_api_server
@@ -256,49 +319,11 @@ capture_screenshot "stack-up" gzclient Gazebo
 
 feature_integration
 capture_screenshot "feature-result" gzclient Gazebo
-capture_contact_sheet
-
-# --- write the report --------------------------------------------------------
-if [ "${FEATURE_VERDICT:-no}" = "yes" ]; then
-  RESULT="PASS ✅"; EXIT=0
-else
-  RESULT="FAIL ❌"; EXIT=1
-fi
-
-{
-  echo "# Integration report — \`$BRANCH\`"
-  echo
-  echo "| Field | Value |"
-  echo "|-------|-------|"
-  echo "| Result | **$RESULT** |"
-  echo "| Branch | \`$BRANCH\` |"
-  echo "| Commit | \`$SHA\` |"
-  echo "| Run at (UTC) | $TS |"
-  echo "| Host | $HOSTNAME_STR |"
-  echo "| ROS setup | $ROS_SETUP |"
-  echo "| Model | $TURTLEBOT3_MODEL |"
-  echo "| Terminal | ${TERM_EMU:-background} |"
-  echo
-  echo "## Steps walked"
-  echo
-  for s in "${STEP_LOG[@]:-}"; do [ -n "$s" ] && echo "- $s"; done
-  echo
-  echo "## Feature verdict"
-  echo
-  echo "- Robot navigated correctly: **${FEATURE_VERDICT:-no}**"
-  echo "- Notes: ${FEATURE_NOTES:-(none)}"
-  if [ "${#SHOTS[@]}" -gt 0 ]; then
-    echo
-    echo "## Artifacts (screenshots / posters — slideshow material)"
-    echo
-    for s in "${SHOTS[@]:-}"; do echo "![${s##*/}](${s#$REPORT_DIR/})"; done
-  fi
-} > "$REPORT"
+COMPLETED=1
 
 echo
-echo "----------------------------------------------------------------"
-echo "Integration result: $RESULT"
-echo "Report: $REPORT"
-echo "----------------------------------------------------------------"
+read -r -p "Run complete. Review the windows, then press Enter to tear the stack down... "
 
-exit "$EXIT"
+# The EXIT trap writes the report (with final screenshot + contact sheet) and
+# tears the stack down — see finalize()/teardown() above.
+if [ "${FEATURE_VERDICT:-no}" = "yes" ]; then exit 0; else exit 1; fi

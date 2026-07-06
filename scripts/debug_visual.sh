@@ -85,10 +85,11 @@ launch_bg gazebo   ros2 launch ros2ai turtlebot3_navigation.launch.py
 echo "  waiting for Gazebo to load..."; sleep 12
 launch_bg nav2     ros2 launch ros2ai navigation2.launch.py
 echo "  waiting for Nav2 to activate..."; sleep 12
-# map->odom static transform: without it Nav2 has no localization and every goal
-# hangs on a missing 'map' frame (README: "Map frame missing").
-launch_bg tf       ros2 run tf2_ros static_transform_publisher 0 0 0 0 0 0 map odom
-sleep 2
+# Localize via AMCL: seed the initial pose so map->odom is published correctly.
+# (A fake static map->odom lets goals plan but with wrong localization — the
+# robot then paths around phantom walls. Seeding AMCL is the real fix.)
+bash "$REPO_ROOT/scripts/set_initial_pose.sh" >/dev/null 2>&1 &
+sleep 3
 launch_bg apiserver ros2 run ros2ai nav2_api_server
 sleep 3
 

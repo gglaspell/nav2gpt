@@ -121,14 +121,16 @@ ros2 launch ros2ai navigation2.launch.py
 
 > **Note:** `navigation2.launch.py` includes commented-out `gzserver` and `gzclient` launch actions. Keep them commented, because Gazebo is already started in Terminal 1.
 
-### Terminal 3 — Publish the `map → odom` transform
+### Terminal 3 — Localize (seed AMCL's initial pose)
 
 ```bash
 source /nav2gpt/nav2gpt_ws/install/setup.bash
-ros2 run tf2_ros static_transform_publisher 0 0 0 0 0 0 map odom
+./scripts/set_initial_pose.sh          # defaults to the house spawn pose (-2.0, -0.5)
 ```
 
-Required for localization: without it Nav2 reports `frame [map] does not exist` and navigation goals never resolve (the API server's service call then blocks). Leave this running.
+Required for localization: until AMCL has an initial pose it never publishes the `map → odom` transform, so Nav2 reports `frame [map] does not exist`, navigation goals never resolve, and the API server's service call blocks. You can instead click **2D Pose Estimate** in RViz and drag the arrow onto the robot's true location — do this if the robot spawns somewhere other than the default.
+
+> A `static_transform_publisher map odom` will silence the "frame missing" error, but it *fakes* localization — the costmap ends up offset from reality and the robot paths around walls that aren't there. Seed AMCL instead.
 
 ### Terminal 4 — Start the Nav2 API Server
 
