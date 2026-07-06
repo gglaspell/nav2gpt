@@ -240,6 +240,11 @@ skipped run — no display needed), and a contact-sheet collage combining a
 run's screenshots into one image. All best-effort — missing tools just skip
 that capture rather than failing the run.
 
+It also captures the **stdout/stderr of every launched terminal** (Gazebo,
+Nav2, localization, API server, voice node) — a capped tail of each is saved
+under `reports/logs/<branch>_<timestamp>/` and embedded in the report as
+collapsible sections, so component errors travel to GitHub without copy-paste.
+
 ---
 
 ## Dependency Notes & Known Fixes

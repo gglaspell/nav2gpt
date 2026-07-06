@@ -159,22 +159,31 @@ TERM_EMU=""
 for t in gnome-terminal konsole xfce4-terminal xterm; do
   command -v "$t" >/dev/null 2>&1 && { TERM_EMU="$t"; break; }
 done
-LOG_DIR="$(mktemp -d)"
-LAUNCH_PATTERNS=()   # for teardown
+LOG_DIR="$(mktemp -d)"   # live per-terminal logs (full, ephemeral)
+LAUNCH_PATTERNS=()       # for teardown
 
+# Every launched component tees its stdout+stderr to $LOG_DIR/<title>.log while
+# still showing in its window, so the output of all four terminals (plus the
+# localization step's autodetect diagnostics) is captured. finalize() copies a
+# capped tail of each into the pushed report — no more retyping errors by hand.
 open_stack_terminal() {   # open_stack_terminal <title> <ros2 command...>
   local title="$1"; shift
   local cmd="$*"
   LAUNCH_PATTERNS+=("$cmd")
-  local inner="source '$ROS_SETUP'; source '$WS_SETUP'; export TURTLEBOT3_MODEL='$TURTLEBOT3_MODEL'; echo '=== $title ==='; $cmd; echo; echo '[$title exited — you can close this window]'; exec bash"
+  local log="$LOG_DIR/$title.log"
+  local env="source '$ROS_SETUP'; source '$WS_SETUP'; export TURTLEBOT3_MODEL='$TURTLEBOT3_MODEL';"
+  # stdbuf -oL keeps output flowing line-by-line into the log instead of getting
+  # stuck in a block buffer when stdout is a pipe.
+  local run="{ echo '=== $title ==='; stdbuf -oL -eL $cmd; } 2>&1 | tee '$log'"
+  local inner="$env $run; echo; echo '[$title exited — you can close this window]'; exec bash"
   case "$TERM_EMU" in
     gnome-terminal)  gnome-terminal --title="$title" -- bash -c "$inner" >/dev/null 2>&1 & ;;
     konsole)         konsole -p tabtitle="$title" -e bash -c "$inner" >/dev/null 2>&1 & ;;
     xfce4-terminal)  xfce4-terminal --title="$title" -x bash -c "$inner" >/dev/null 2>&1 & ;;
     xterm)           xterm -T "$title" -e bash -c "$inner" >/dev/null 2>&1 & ;;
-    "")              # no emulator: background with a log file
-      bash -c "source '$ROS_SETUP'; source '$WS_SETUP'; export TURTLEBOT3_MODEL='$TURTLEBOT3_MODEL'; $cmd" >"$LOG_DIR/$title.log" 2>&1 &
-      echo "   (no terminal emulator; '$title' running in background, log: $LOG_DIR/$title.log)" ;;
+    "")              # no emulator: background, output straight to the log file
+      bash -c "$env stdbuf -oL -eL $cmd" >"$log" 2>&1 &
+      echo "   (no terminal emulator; '$title' running in background, log: $log)" ;;
   esac
 }
 
@@ -222,6 +231,16 @@ finalize() {
   capture_screenshot "final-state" gzclient Gazebo rviz2 RViz
   capture_contact_sheet
 
+  # Collect each terminal's output: copy a capped tail into the pushed report
+  # dir (full live logs can be huge/noisy) so the logs travel to GitHub.
+  local pushlog="$REPORT_DIR/logs/${SLUG}_${TS}"
+  local f
+  for f in "$LOG_DIR"/*.log; do
+    [ -f "$f" ] || continue
+    mkdir -p "$pushlog"
+    tail -n 300 "$f" > "$pushlog/$(basename "$f")"
+  done
+
   local result
   if [ "$COMPLETED" != "1" ]; then
     result="INCOMPLETE ⏹️ (run ended before the feature verdict)"
@@ -258,6 +277,23 @@ finalize() {
       echo "## Artifacts (screenshots / posters — slideshow material)"
       echo
       for s in "${SHOTS[@]:-}"; do [ -n "$s" ] && echo "![${s##*/}](${s#$REPORT_DIR/})"; done
+    fi
+    if [ -d "$pushlog" ]; then
+      echo
+      echo "## Terminal logs (last 300 lines each)"
+      echo
+      for f in "$pushlog"/*.log; do
+        [ -f "$f" ] || continue
+        echo "<details><summary><code>$(basename "$f" .log)</code></summary>"
+        echo
+        echo '```'
+        # strip ANSI colour codes so the log reads cleanly on GitHub
+        sed 's/\x1b\[[0-9;]*[mGKHF]//g' "$f"
+        echo '```'
+        echo
+        echo "</details>"
+        echo
+      done
     fi
   } > "$REPORT"
 
