@@ -101,7 +101,7 @@ source install/setup.bash
 
 ## Running the Project
 
-You need **four terminals** open inside the container. In VS Code, open new terminals with `` Ctrl+` `` and the `+` button.
+You need **five terminals** open inside the container. In VS Code, open new terminals with `` Ctrl+` `` and the `+` button. (The `scripts/integration_test.sh` harness runs all of these for you and walks you through them.)
 
 ### Terminal 1 — Launch Gazebo + TurtleBot3
 
@@ -121,7 +121,16 @@ ros2 launch ros2ai navigation2.launch.py
 
 > **Note:** `navigation2.launch.py` includes commented-out `gzserver` and `gzclient` launch actions. Keep them commented, because Gazebo is already started in Terminal 1.
 
-### Terminal 3 — Start the Nav2 API Server
+### Terminal 3 — Publish the `map → odom` transform
+
+```bash
+source /nav2gpt/nav2gpt_ws/install/setup.bash
+ros2 run tf2_ros static_transform_publisher 0 0 0 0 0 0 map odom
+```
+
+Required for localization: without it Nav2 reports `frame [map] does not exist` and navigation goals never resolve (the API server's service call then blocks). Leave this running.
+
+### Terminal 4 — Start the Nav2 API Server
 
 ```bash
 source /nav2gpt/nav2gpt_ws/install/setup.bash
@@ -134,7 +143,7 @@ Expected output:
 [INFO] [nav2_api_server]: Nav2 API Server is ready
 ```
 
-### Terminal 4 — Start the LLM Voice Node
+### Terminal 5 — Start the LLM Voice Node
 
 ```bash
 source /nav2gpt/nav2gpt_ws/install/setup.bash

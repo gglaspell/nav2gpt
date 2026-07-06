@@ -16,6 +16,9 @@ class Nav2ApiServer(Node):
         super().__init__("nav2_api_server")
         self.server = self.create_service(Nav2Gpt, "goToPose", self.service_clbk)
         self.nav2_client = BasicNavigator()
+        # The node otherwise runs silently; announce readiness so operators know
+        # the server came up (matches the "ready" line documented in the README).
+        self.get_logger().info("Nav2 API Server is ready")
 
     
     def service_clbk(self, req, res):

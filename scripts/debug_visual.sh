@@ -85,6 +85,10 @@ launch_bg gazebo   ros2 launch ros2ai turtlebot3_navigation.launch.py
 echo "  waiting for Gazebo to load..."; sleep 12
 launch_bg nav2     ros2 launch ros2ai navigation2.launch.py
 echo "  waiting for Nav2 to activate..."; sleep 12
+# map->odom static transform: without it Nav2 has no localization and every goal
+# hangs on a missing 'map' frame (README: "Map frame missing").
+launch_bg tf       ros2 run tf2_ros static_transform_publisher 0 0 0 0 0 0 map odom
+sleep 2
 launch_bg apiserver ros2 run ros2ai nav2_api_server
 sleep 3
 

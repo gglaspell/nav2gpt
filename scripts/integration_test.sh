@@ -237,9 +237,17 @@ open_stack_terminal "2-nav2" ros2 launch ros2ai navigation2.launch.py
 pause "Wait until Nav2 lifecycle nodes are active (no more 'configuring' spam)."
 capture_screenshot "nav2-active" rviz2 RViz rviz
 
+# Without a map->odom transform Nav2 has no localization: TF throws "frame does
+# not exist" and every goal hangs forever (which also blocks the API server's
+# service call). README documents this under "Map frame missing". Publish it so
+# navigation goals resolve. It must keep running, so it's its own component.
+record "Static transform map->odom (fixes 'frame [map] does not exist')"
+open_stack_terminal "2b-tf" ros2 run tf2_ros static_transform_publisher 0 0 0 0 0 0 map odom
+pause "Give it a second to start publishing map->odom."
+
 record "Terminal 3 — Nav2 API server"
 open_stack_terminal "3-apiserver" ros2 run ros2ai nav2_api_server
-pause "Confirm the API server started without errors."
+pause "Wait for 'Nav2 API Server is ready'. (Little other output is normal — it then waits silently for goals.)"
 
 record "Terminal 4 — LLM voice node"
 open_stack_terminal "4-voice" ros2 run ros2ai Nav2Gpt
