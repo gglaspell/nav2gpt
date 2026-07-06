@@ -125,7 +125,7 @@ ros2 launch ros2ai navigation2.launch.py
 
 ```bash
 source /nav2gpt/nav2gpt_ws/install/setup.bash
-./scripts/set_initial_pose.sh          # defaults to the house spawn pose (-2.0, -0.5)
+./scripts/set_initial_pose.sh          # defaults to the measured house spawn pose (-0.07, -0.56)
 ```
 
 Required for localization: until AMCL has an initial pose it never publishes the `map → odom` transform, so Nav2 reports `frame [map] does not exist`, navigation goals never resolve, and the API server's service call blocks. You can instead click **2D Pose Estimate** in RViz and drag the arrow onto the robot's true location — do this if the robot spawns somewhere other than the default.
