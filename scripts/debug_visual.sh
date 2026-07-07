@@ -21,7 +21,9 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$REPO_ROOT"
 
 BRANCH="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo unknown)"
-: "${TURTLEBOT3_MODEL:=waffle}"   # Nav2 launch uses the waffle urdf; override if needed
+# FORCE waffle: Nav2 loads the waffle URDF + waffle params, so the spawned model
+# must be waffle to match (the container env may still say burger until rebuilt).
+TURTLEBOT3_MODEL=waffle
 export TURTLEBOT3_MODEL
 
 # ── FEATURE HOOK ─────────────────────────────────────────────────────────────

@@ -32,7 +32,10 @@ BRANCH="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo unknown)"
 SHA="$(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
 TS="$(date -u +%Y%m%dT%H%M%SZ)"
 HOSTNAME_STR="$(hostname 2>/dev/null || echo unknown)"
-: "${TURTLEBOT3_MODEL:=waffle}"; export TURTLEBOT3_MODEL
+# FORCE waffle (not just default): the container env may still say burger until
+# it's rebuilt, but Nav2 loads the waffle URDF + waffle params, so the spawned
+# model must be waffle to match. Forcing it here makes the fix work immediately.
+TURTLEBOT3_MODEL=waffle; export TURTLEBOT3_MODEL
 
 REPORT_DIR="$REPO_ROOT/reports"; mkdir -p "$REPORT_DIR"
 SLUG="$(echo "$BRANCH" | tr '/ ' '__')"
@@ -352,6 +355,13 @@ record "Localization — seed AMCL initial pose"
 open_stack_terminal "2b-initpose" bash "$REPO_ROOT/scripts/set_initial_pose.sh"
 pause "In RViz, confirm 'Localization' is no longer 'unknown' and the robot sits on the map correctly. (Or use RViz '2D Pose Estimate' to nudge it.)"
 capture_screenshot "localized" rviz2 RViz rviz
+
+# Direct Nav2 test: send the kitchen goal straight to /navigate_to_pose, bypassing
+# the LLM. This is the decisive check — it isolates whether Nav2 itself can path.
+record "Direct Nav2 goal — drive to kitchen (bypasses the LLM)"
+open_stack_terminal "2c-navgoal" bash "$REPO_ROOT/scripts/nav_goal.sh" -4.0 4.0 180
+pause "Watch the robot drive to the kitchen. The 2c-navgoal window prints the result (SUCCEEDED, or ABORTED + the reason)."
+capture_screenshot "nav-goal-result" gzclient Gazebo rviz2 RViz
 
 record "Terminal 3 — Nav2 API server"
 open_stack_terminal "3-apiserver" ros2 run ros2ai nav2_api_server

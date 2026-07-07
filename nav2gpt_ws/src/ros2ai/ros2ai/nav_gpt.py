@@ -20,6 +20,52 @@ import whisper
 import time
 import json
 
+
+def parse_commands(text):
+    """Extract a list of command dicts from an LLM response.
+
+    Tolerates prose, ```json fences, or a single object instead of a list, so a
+    valid goal isn't dropped by a bare json.loads() that requires a clean list.
+    Returns a list (possibly empty).
+    """
+    if not text:
+        return []
+    # Try the whole thing first (clean case).
+    for candidate in (text, _first_json_block(text)):
+        if not candidate:
+            continue
+        try:
+            parsed = json.loads(candidate)
+        except (ValueError, TypeError):
+            continue
+        if isinstance(parsed, dict):
+            return [parsed]
+        if isinstance(parsed, list):
+            return parsed
+    return []
+
+
+def _first_json_block(text):
+    """Return the first balanced [...] or {...} block found in text, or None."""
+    start = None
+    for i, ch in enumerate(text):
+        if ch in "[{":
+            start = i
+            open_ch, close_ch = ch, "]" if ch == "[" else "}"
+            break
+    if start is None:
+        return None
+    depth = 0
+    for j in range(start, len(text)):
+        if text[j] == open_ch:
+            depth += 1
+        elif text[j] == close_ch:
+            depth -= 1
+            if depth == 0:
+                return text[start:j + 1]
+    return None
+
+
 # --- DEV MODE -----------------------------------------------------------
 # Lets you press 'x' at the recording prompt to skip the mic + Whisper and
 # inject a known-good transcript instead (handy when you can't speak out
@@ -28,6 +74,7 @@ import json
 DEV_MODE_CANNED_TRANSCRIPT = True
 CANNED_TRANSCRIPT = "Go to the kitchen"
 # --------------------------------------------------------------------------
+
 
 class NavGpt(Node):
     def __init__(self):
@@ -154,18 +201,18 @@ def main(args=None):
                 "properties": {
                     "x": {
                         "type": "number",
-                        "min": 0,
+                        "min": -6,
                         "max": 10
                     },
                     "y": {
                         "type": "number",
-                        "min": 0,
-                        "max": 10
+                        "min": -6,
+                        "max": 7
                     },
                     "theta": {
                         "type": "number",
-                        "min": -3.14,
-                        "max": 3.14
+                        "min": -180,
+                        "max": 180
                     }
                 },
                 "required": [
@@ -207,9 +254,14 @@ def main(args=None):
         # print(prompt)
 
         result = node.llm.invoke(prompt)
-        print(result)
+        print("LLM raw output:", result)
 
-        commands = json.loads(result)
+        # llama3 sometimes wraps the JSON in prose or ```json fences. Extract the
+        # first [...] array (or {...} object) so a valid goal isn't lost to a
+        # bare json.loads() that only accepts a clean list.
+        commands = parse_commands(result)
+        if not commands:
+            print("ERROR: could not parse a command list from the LLM output above.")
         # Iterate through each command and execute
         for command in commands:
             node.execute_command(command)

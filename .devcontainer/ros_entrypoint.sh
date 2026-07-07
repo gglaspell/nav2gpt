@@ -22,7 +22,10 @@ source /usr/share/colcon_argcomplete/hook/colcon-argcomplete.bash
 # Switch to CycloneDDS
 export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
 
-# TurtleBot3 model for Gazebo simulation
-export TURTLEBOT3_MODEL=burger
+# TurtleBot3 model for Gazebo simulation.
+# MUST be waffle: navigation2.launch.py loads the waffle URDF + waffle-tuned Nav2
+# params, so spawning a burger here mismatches the costmap footprint and the
+# base_link->base_scan TF, which corrupts the costmap and breaks path planning.
+export TURTLEBOT3_MODEL=waffle
 
 exec "$@"

@@ -11,7 +11,7 @@
   "workspaceFolder": "/${localWorkspaceFolderBasename}",
   "containerEnv": {
     "DISPLAY": "${localEnv:DISPLAY}",
-    "TURTLEBOT3_MODEL": "burger",
+    "TURTLEBOT3_MODEL": "waffle",
     "COLCON_WS": "/${localWorkspaceFolderBasename}"
   },
   "mounts": [

@@ -17,7 +17,7 @@ BASHRC="$HOME/.bashrc"
   echo "source /usr/share/colcon_cd/function/colcon_cd.sh"
   echo "export _colcon_cd_root=/opt/ros/humble/"
   echo "source /usr/share/colcon_argcomplete/hook/colcon-argcomplete.bash"
-  echo "export TURTLEBOT3_MODEL=burger"
+  echo "export TURTLEBOT3_MODEL=waffle"
 } >> "$BASHRC"
 
 echo "Starting Ollama server..."

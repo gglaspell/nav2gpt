@@ -32,22 +32,27 @@ class Nav2ApiServer(Node):
         pose.pose.orientation.y = quat[1]
         pose.pose.orientation.z = quat[2]
         pose.pose.orientation.w = quat[3]
-        self.nav2_client.goToPose(pose)
+        # goToPose returns False if Nav2 REJECTS the goal (start/goal in a
+        # lethal or inflated cell, server not active). Without checking this, a
+        # rejected goal makes isTaskComplete() return True immediately and the
+        # server would report a phantom success while the robot never moves.
+        accepted = self.nav2_client.goToPose(pose)
+        if not accepted:
+            self.get_logger().error(
+                f"goToPose REJECTED for ({req.x:.2f}, {req.y:.2f}) — goal likely "
+                "in a lethal/inflated cell, or Nav2 is not active yet.")
+            res.status = False
+            return res
+
+        self.get_logger().info(
+            f"Navigating to ({req.x:.2f}, {req.y:.2f}, {req.theta:.0f} deg)...")
         while not self.nav2_client.isTaskComplete():
-            # feedback = self.nav2_client.getFeedback()
-            # if feedback.navigation_duration > 600:
-            #     self.nav2_client.cancelTask()
+            # feedback/timeout/cancel handling lands on the nav-feedback branch
             pass
-        
+
         result = self.nav2_client.getResult()
-        if result == TaskResult.SUCCEEDED:
-            print('Goal succeeded!')
-        elif result == TaskResult.CANCELED:
-            print('Goal was canceled!')
-        elif result == TaskResult.FAILED:
-            print('Goal failed!')
-        pass
-        res.status = True
+        self.get_logger().info(f"goToPose result: {result}")
+        res.status = (result == TaskResult.SUCCEEDED)
         return res
 
 def main(args=None):
