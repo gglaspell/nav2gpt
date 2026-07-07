@@ -243,7 +243,11 @@ finalize() {
   for f in "$LOG_DIR"/*.log; do
     [ -f "$f" ] || continue
     mkdir -p "$pushlog"
-    tail -n 300 "$f" > "$pushlog/$(basename "$f")"
+    # Drop high-volume repetitive noise (pre-localization TF spam, audio warnings,
+    # RViz message-filter chatter) so the useful lines — the nav goal, planner and
+    # controller output, real errors — survive the tail instead of being crowded out.
+    grep -avE 'frame \[?map\]? .*does not exist|Timed out waiting for transform|AMCL cannot publish|AL lib:|Message Filter dropping|ALSA lib' "$f" \
+      | tail -n 800 > "$pushlog/$(basename "$f")"
   done
 
   local result
