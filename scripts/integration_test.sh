@@ -176,20 +176,25 @@ open_stack_terminal() {   # open_stack_terminal <title> <ros2 command...>
   # stuck in a block buffer when stdout is a pipe.
   local run="{ echo '=== $title ==='; stdbuf -oL -eL $cmd; } 2>&1 | tee '$log'"
   local inner="$env $run; echo; echo '[$title exited — you can close this window]'; exec bash"
+  # </dev/null on every launch so a backgrounded component can't consume the
+  # script's stdin (which would make the Enter prompts stop waiting).
   case "$TERM_EMU" in
-    gnome-terminal)  gnome-terminal --title="$title" -- bash -c "$inner" >/dev/null 2>&1 & ;;
-    konsole)         konsole -p tabtitle="$title" -e bash -c "$inner" >/dev/null 2>&1 & ;;
-    xfce4-terminal)  xfce4-terminal --title="$title" -x bash -c "$inner" >/dev/null 2>&1 & ;;
-    xterm)           xterm -T "$title" -e bash -c "$inner" >/dev/null 2>&1 & ;;
+    gnome-terminal)  gnome-terminal --title="$title" -- bash -c "$inner" </dev/null >/dev/null 2>&1 & ;;
+    konsole)         konsole -p tabtitle="$title" -e bash -c "$inner" </dev/null >/dev/null 2>&1 & ;;
+    xfce4-terminal)  xfce4-terminal --title="$title" -x bash -c "$inner" </dev/null >/dev/null 2>&1 & ;;
+    xterm)           xterm -T "$title" -e bash -c "$inner" </dev/null >/dev/null 2>&1 & ;;
     "")              # no emulator: background, output straight to the log file
-      bash -c "$env stdbuf -oL -eL $cmd" >"$log" 2>&1 &
+      bash -c "$env stdbuf -oL -eL $cmd" </dev/null >"$log" 2>&1 &
       echo "   (no terminal emulator; '$title' running in background, log: $log)" ;;
   esac
 }
 
-pause() { read -r -p "   ↳ $1 [Enter to continue] "; }
+# Read prompts from the controlling terminal (/dev/tty), NOT fd 0. A backgrounded
+# stack component can otherwise leave the script's stdin at EOF, which made every
+# `read` return instantly and launch all terminals at once without waiting.
+pause() { read -r -p "   ↳ $1 [Enter to continue] " </dev/tty; }
 ask_yn() {   # ask_yn <question> -> sets REPLY_YN to yes/no
-  local a; read -r -p "   ↳ $1 [y/N] " a
+  local a; read -r -p "   ↳ $1 [y/N] " a </dev/tty
   case "$a" in [yY]*) REPLY_YN=yes ;; *) REPLY_YN=no ;; esac
 }
 
@@ -212,7 +217,7 @@ feature_integration() {
   pause "Watch Gazebo: the robot should plan a path and drive to the kitchen."
   ask_yn "Did the robot navigate to the goal correctly (same as main)?"
   FEATURE_VERDICT="$REPLY_YN"
-  read -r -p "   ↳ Notes (optional, Enter to skip): " FEATURE_NOTES
+  read -r -p "   ↳ Notes (optional, Enter to skip): " FEATURE_NOTES </dev/tty
 }
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -358,7 +363,7 @@ capture_screenshot "feature-result" gzclient Gazebo
 COMPLETED=1
 
 echo
-read -r -p "Run complete. Review the windows, then press Enter to tear the stack down... "
+read -r -p "Run complete. Review the windows, then press Enter to tear the stack down... " </dev/tty
 
 # The EXIT trap writes the report (with final screenshot + contact sheet) and
 # tears the stack down — see finalize()/teardown() above.
