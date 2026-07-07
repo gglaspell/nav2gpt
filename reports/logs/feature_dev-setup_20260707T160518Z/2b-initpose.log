@@ -1,0 +1,11 @@
+=== 2b-initpose ===
+Auto-detecting the robot's spawn pose from Gazebo...
+  auto-detect failed:
+    ERROR: could not read robot pose from Gazebo (state plugin/gz CLI unavailable)
+    # available gazebo topics: none
+    # available gazebo services: ['/gazebo/describe_parameters', '/gazebo/get_parameter_types', '/gazebo/get_parameters', '/gazebo/list_parameters', '/gazebo/set_parameters', '/gazebo/set_parameters_atomically']
+Initial pose source: measured fallback  ->  x=-0.07 y=-0.56 qz=0.0 qw=1.0
+Waiting for the amcl node to come up...
+Seeding AMCL initial pose in 'map' frame...
+AMCL is publishing /amcl_pose — localized (attempt 1).
+Done. RViz's 'frame [map] does not exist' should clear and the robot should sit on the map correctly.
