@@ -1,0 +1,32 @@
+=== 1-gazebo ===
+[INFO] [launch]: All log files can be found below /home/ubuntu/.ros/log/2026-07-08-17-50-40-174122-bragg3d-Precision-7560-1591
+[INFO] [launch]: Default logging verbosity is set to INFO
+urdf_file_name : turtlebot3_burger.urdf
+urdf_file_name : turtlebot3_burger.urdf
+urdf_file_name : turtlebot3_burger.urdf
+[INFO] [gzserver-1]: process started with pid [1593]
+[INFO] [gzclient-2]: process started with pid [1595]
+[INFO] [robot_state_publisher-3]: process started with pid [1597]
+[INFO] [spawn_entity.py-4]: process started with pid [1599]
+[robot_state_publisher-3] [INFO] [1783533041.120694885] [robot_state_publisher]: got segment base_footprint
+[robot_state_publisher-3] [INFO] [1783533041.120762573] [robot_state_publisher]: got segment base_link
+[robot_state_publisher-3] [INFO] [1783533041.120768181] [robot_state_publisher]: got segment base_scan
+[robot_state_publisher-3] [INFO] [1783533041.120771691] [robot_state_publisher]: got segment caster_back_link
+[robot_state_publisher-3] [INFO] [1783533041.120775085] [robot_state_publisher]: got segment imu_link
+[robot_state_publisher-3] [INFO] [1783533041.120778474] [robot_state_publisher]: got segment wheel_left_link
+[robot_state_publisher-3] [INFO] [1783533041.120781920] [robot_state_publisher]: got segment wheel_right_link
+[spawn_entity.py-4] [INFO] [1783533041.382624896] [spawn_entity]: Spawn Entity started
+[spawn_entity.py-4] [INFO] [1783533041.382848811] [spawn_entity]: Loading entity XML from file /opt/ros/humble/share/turtlebot3_gazebo/models/turtlebot3_burger/model.sdf
+[spawn_entity.py-4] [INFO] [1783533041.383485390] [spawn_entity]: Waiting for service /spawn_entity, timeout = 30
+[spawn_entity.py-4] [INFO] [1783533041.383774616] [spawn_entity]: Waiting for service /spawn_entity
+[spawn_entity.py-4] [INFO] [1783533042.136992507] [spawn_entity]: Calling service /spawn_entity
+[gzserver-1] [INFO] [1783533042.387867672] [turtlebot3_imu]: <initial_orientation_as_reference> is unset, using default value of false to comply with REP 145 (world as orientation reference)
+[spawn_entity.py-4] [INFO] [1783533042.437771483] [spawn_entity]: Spawn status: SpawnEntity: Successfully spawned entity [burger]
+[gzserver-1] [INFO] [1783533042.546336464] [turtlebot3_diff_drive]: Wheel pair 1 separation set to [0.160000m]
+[gzserver-1] [INFO] [1783533042.546375331] [turtlebot3_diff_drive]: Wheel pair 1 diameter set to [0.066000m]
+[gzserver-1] [INFO] [1783533042.546714438] [turtlebot3_diff_drive]: Subscribed to [/cmd_vel]
+[gzserver-1] [INFO] [1783533042.547420462] [turtlebot3_diff_drive]: Advertise odometry on [/odom]
+[gzserver-1] [INFO] [1783533042.548178438] [turtlebot3_diff_drive]: Publishing odom transforms between [odom] and [base_footprint]
+[gzserver-1] [INFO] [1783533042.552530210] [turtlebot3_joint_state]: Going to publish joint [wheel_left_joint]
+[gzserver-1] [INFO] [1783533042.552546697] [turtlebot3_joint_state]: Going to publish joint [wheel_right_joint]
+[INFO] [spawn_entity.py-4]: process has finished cleanly [pid 1599]
