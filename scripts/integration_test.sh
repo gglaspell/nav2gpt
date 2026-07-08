@@ -32,10 +32,10 @@ BRANCH="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo unknown)"
 SHA="$(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
 TS="$(date -u +%Y%m%dT%H%M%SZ)"
 HOSTNAME_STR="$(hostname 2>/dev/null || echo unknown)"
-# FORCE waffle (not just default): the container env may still say burger until
-# it's rebuilt, but Nav2 loads the waffle URDF + waffle params, so the spawned
-# model must be waffle to match. Forcing it here makes the fix work immediately.
-TURTLEBOT3_MODEL=waffle; export TURTLEBOT3_MODEL
+# FORCE burger (not just default): Nav2 loads the burger URDF + burger-tuned
+# params, and the burger fits the house doorways (the waffle wedges). Forcing it
+# here makes the model correct even if the container env still says otherwise.
+TURTLEBOT3_MODEL=burger; export TURTLEBOT3_MODEL
 
 REPORT_DIR="$REPO_ROOT/reports"; mkdir -p "$REPORT_DIR"
 SLUG="$(echo "$BRANCH" | tr '/ ' '__')"

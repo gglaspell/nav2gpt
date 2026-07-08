@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 
 import os
+import re
+import tempfile
 
 from ament_index_python.packages import get_package_share_directory
 
@@ -17,6 +19,25 @@ def generate_launch_description():
     bringup_dir = get_package_share_directory('nav2_bringup')
     ros2ai_dir = get_package_share_directory('ros2ai')
     launch_dir = os.path.join(bringup_dir, 'launch')
+
+    # nav2_bringup's default params are tuned for a waffle (robot_radius 0.22),
+    # which over-inflates the burger (radius ~0.105) so the costmap treats it as
+    # too "fat" to fit the house doorways -> the robot wedges and planning fails.
+    # Derive a burger-tuned params file from the installed default by patching
+    # robot_radius + inflation_radius; fall back to the default if unreadable.
+    default_params_file = os.path.join(bringup_dir, 'params', 'nav2_params.yaml')
+    try:
+        with open(default_params_file, 'r') as _f:
+            _params = _f.read()
+        _params = re.sub(r'robot_radius:\s*[0-9.]+', 'robot_radius: 0.12', _params)
+        _params = re.sub(r'inflation_radius:\s*[0-9.]+', 'inflation_radius: 0.35', _params)
+        burger_params_file = os.path.join(tempfile.gettempdir(),
+                                          'nav2gpt_burger_nav2_params.yaml')
+        with open(burger_params_file, 'w') as _f:
+            _f.write(_params)
+        params_default = burger_params_file
+    except OSError:
+        params_default = default_params_file
 
     # Create the launch configuration variables
     slam = LaunchConfiguration('slam')
@@ -83,7 +104,7 @@ def generate_launch_description():
 
     declare_params_file_cmd = DeclareLaunchArgument(
         'params_file',
-        default_value=os.path.join(bringup_dir, 'params', 'nav2_params.yaml'),
+        default_value=params_default,
         description='Full path to the ROS2 parameters file to use for all launched nodes')
 
     declare_autostart_cmd = DeclareLaunchArgument(
@@ -133,9 +154,11 @@ def generate_launch_description():
         default_value=os.path.join(bringup_dir, 'worlds', 'world_only.model'),
         description='Full path to world model file to load')
 
+    # Inert here (the Gazebo spawner below is commented out — Gazebo comes from
+    # turtlebot3_navigation.launch.py), but kept as burger for consistency.
     declare_robot_name_cmd = DeclareLaunchArgument(
         'robot_name',
-        default_value='turtlebot3_waffle',
+        default_value='turtlebot3_burger',
         description='name of the robot')
 
     declare_robot_sdf_cmd = DeclareLaunchArgument(
@@ -156,7 +179,9 @@ def generate_launch_description():
         cmd=['gzclient'],
         cwd=[launch_dir], output='screen')
 
-    urdf = os.path.join(bringup_dir, 'urdf', 'turtlebot3_waffle.urdf')
+    # Must match the model Gazebo actually spawns (burger) so the base_link ->
+    # base_scan TF is correct; a waffle URDF here mislocates the burger's laser.
+    urdf = os.path.join(bringup_dir, 'urdf', 'turtlebot3_burger.urdf')
     with open(urdf, 'r') as infp:
         robot_description = infp.read()
 

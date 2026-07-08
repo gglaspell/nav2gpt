@@ -91,7 +91,7 @@ RUN usermod --append --groups video,audio $USERNAME
 USER $USERNAME
 
 # Set default TurtleBot3 model for nav2gpt
-ENV TURTLEBOT3_MODEL=waffle
+ENV TURTLEBOT3_MODEL=burger
 
 ENTRYPOINT ["/ros_entrypoint.sh"]
 CMD ["bash"]

@@ -3,7 +3,7 @@
 ## Commands
 
 ```bash
-export TURTLEBOT3_MODEL=waffle
+export TURTLEBOT3_MODEL=burger
 
 ros2 launch ros2ai navigation2.launch.py
 
