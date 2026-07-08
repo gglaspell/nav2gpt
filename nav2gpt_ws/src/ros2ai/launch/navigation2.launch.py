@@ -29,8 +29,11 @@ def generate_launch_description():
     try:
         with open(default_params_file, 'r') as _f:
             _params = _f.read()
-        _params = re.sub(r'robot_radius:\s*[0-9.]+', 'robot_radius: 0.12', _params)
-        _params = re.sub(r'inflation_radius:\s*[0-9.]+', 'inflation_radius: 0.35', _params)
+        _params, _n_rr = re.subn(r'robot_radius:\s*[0-9.]+', 'robot_radius: 0.12', _params)
+        _params, _n_ir = re.subn(r'inflation_radius:\s*[0-9.]+', 'inflation_radius: 0.35', _params)
+        if _n_rr == 0:
+            print('WARNING [navigation2.launch]: robot_radius not found in nav2_params.yaml; '
+                  'burger footprint NOT applied — costmap may over-inflate. Check params format.')
         burger_params_file = os.path.join(tempfile.gettempdir(),
                                           'nav2gpt_burger_nav2_params.yaml')
         with open(burger_params_file, 'w') as _f:

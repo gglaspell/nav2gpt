@@ -102,9 +102,13 @@ class NavGpt(Node):
     def execute_command(self, command):
         service = command["service"]
         args = command["args"]
-        
+
+        # Normalize: llama3 sometimes emits "goToPose" without the leading slash,
+        # which would otherwise fall through to "Unknown service" and silently no-op.
+        service_name = service.strip().lstrip("/")
+
         # Execute based on service
-        if service == "/goToPose":
+        if service_name == "goToPose":
             x = args["x"]
             y = args["y"]
             theta = args["theta"]
@@ -116,7 +120,7 @@ class NavGpt(Node):
             rclpy.spin_until_future_complete(self, self.future)
             print(self.future.result())
             # Implement your logic to execute goToPose command
-        elif service == "/wait":
+        elif service_name == "wait":
             print("Executing wait")
             time.sleep(5)
             # Implement your logic to execute wait command
