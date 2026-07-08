@@ -130,9 +130,14 @@ def generate_launch_description():
         default_value='True',
         description='Whether to start the simulator')
 
+    # OFF by default: turtlebot3_navigation.launch.py (Terminal 1) already starts
+    # a robot_state_publisher with the correct burger URDF. Running a second one
+    # here caused a conflicting/broken TF tree (its URDF's ${namespace} frame
+    # placeholders were unexpanded, so it published orphaned '${namespace}base_link'
+    # frames and RViz drew the robot away from its real Gazebo pose).
     declare_use_robot_state_pub_cmd = DeclareLaunchArgument(
         'use_robot_state_pub',
-        default_value='True',
+        default_value='False',
         description='Whether to start the robot state publisher')
 
     declare_use_rviz_cmd = DeclareLaunchArgument(
@@ -195,7 +200,9 @@ def generate_launch_description():
     urdf_candidates.append(os.path.join(bringup_dir, 'urdf', 'turtlebot3_waffle.urdf'))
     urdf = next((u for u in urdf_candidates if os.path.isfile(u)), urdf_candidates[-1])
     with open(urdf, 'r') as infp:
-        robot_description = infp.read()
+        # turtlebot3_description URDFs template the frame prefix as ${namespace};
+        # expand it to empty (single-robot) so we don't publish '${namespace}base_link'.
+        robot_description = infp.read().replace('${namespace}', '')
 
     start_robot_state_publisher_cmd = Node(
         condition=IfCondition(use_robot_state_pub),
