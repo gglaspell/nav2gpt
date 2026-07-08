@@ -179,9 +179,21 @@ def generate_launch_description():
         cmd=['gzclient'],
         cwd=[launch_dir], output='screen')
 
-    # Must match the model Gazebo actually spawns (burger) so the base_link ->
-    # base_scan TF is correct; a waffle URDF here mislocates the burger's laser.
-    urdf = os.path.join(bringup_dir, 'urdf', 'turtlebot3_burger.urdf')
+    # Use the URDF matching the model Gazebo actually spawns so the base_link ->
+    # base_scan TF is correct (a mismatched URDF mislocates the laser). nav2_bringup
+    # only ships the waffle URDF, so the burger URDF must come from
+    # turtlebot3_description. Search candidates and use the first that exists;
+    # fall back to nav2_bringup's waffle (always present) so launch never crashes.
+    tb3_model = os.environ.get('TURTLEBOT3_MODEL', 'burger')
+    urdf_candidates = []
+    for _pkg in ('turtlebot3_description', 'nav2_bringup'):
+        try:
+            urdf_candidates.append(os.path.join(
+                get_package_share_directory(_pkg), 'urdf', 'turtlebot3_%s.urdf' % tb3_model))
+        except Exception:  # noqa: BLE001 - package may not be installed
+            pass
+    urdf_candidates.append(os.path.join(bringup_dir, 'urdf', 'turtlebot3_waffle.urdf'))
+    urdf = next((u for u in urdf_candidates if os.path.isfile(u)), urdf_candidates[-1])
     with open(urdf, 'r') as infp:
         robot_description = infp.read()
 
