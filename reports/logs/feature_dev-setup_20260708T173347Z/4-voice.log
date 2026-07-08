@@ -1,0 +1,15 @@
+=== 4-voice ===
+[INFO] [1783532189.411749126] [nav_gpt]: connected to goToPose server
+Press Enter to start recording, or 'x' to inject a canned transcript... [DEV MODE] Using canned transcript: 'Go to the kitchen'
+LLM raw output: [
+    {
+        "service": "/goToPose",
+        "args": {
+            "x": -4,
+            "y": 4,
+            "theta": 180
+        }
+    }
+]
+Executing goToPose with x=-4, y=4, theta=180
+ros2ai_msgs.srv.Nav2Gpt_Response(status=False)
