@@ -31,6 +31,16 @@ ros2 service call /global_costmap/clear_entirely_global_costmap nav2_msgs/srv/Cl
 ros2 service call /local_costmap/clear_entirely_local_costmap nav2_msgs/srv/ClearEntireCostmap "{}" >/dev/null 2>&1 || true
 sleep 2
 
+# --- pre-goal diagnostics: prove the config actually took effect ------------
+echo "=== pre-goal diagnostics ==="
+echo "-- global_costmap robot_radius (want 0.12 = burger; 0.22 = params patch FAILED, would over-inflate):"
+ros2 param get /global_costmap/global_costmap robot_radius 2>/dev/null || echo "   (could not read robot_radius)"
+echo "-- map -> base_link transform (confirms the TF chain is complete + where the robot really is):"
+timeout 4 ros2 run tf2_ros tf2_echo map base_link 2>/dev/null | grep -A5 -m1 "At time" \
+  || echo "   (NO map->base_link transform — localization/TF is broken)"
+echo "============================"
+echo
+
 echo "Sending NavigateToPose goal: x=$X y=$Y yaw=${YAWDEG}deg (map frame)"
 echo "(bypasses the LLM — tests Nav2 planning + control directly)"
 echo
