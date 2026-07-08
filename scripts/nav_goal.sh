@@ -20,6 +20,17 @@ YAWDEG="${3:-180}"
 # yaw (deg) -> quaternion z,w about +z
 read -r QZ QW < <(python3 -c "import math; y=math.radians($YAWDEG); print(math.sin(y/2.0), math.cos(y/2.0))")
 
+# Let AMCL converge and the costmaps populate before planning. Sending a goal
+# immediately after localization makes the global planner fail repeatedly on a
+# half-built costmap (it burns recovery behaviours and can abort even though the
+# route is clear once settled). Wait, then clear stale/phantom obstacle data.
+echo "Letting localization + costmaps settle before planning..."
+sleep 10
+echo "Clearing costmaps for a clean start..."
+ros2 service call /global_costmap/clear_entirely_global_costmap nav2_msgs/srv/ClearEntireCostmap "{}" >/dev/null 2>&1 || true
+ros2 service call /local_costmap/clear_entirely_local_costmap nav2_msgs/srv/ClearEntireCostmap "{}" >/dev/null 2>&1 || true
+sleep 2
+
 echo "Sending NavigateToPose goal: x=$X y=$Y yaw=${YAWDEG}deg (map frame)"
 echo "(bypasses the LLM — tests Nav2 planning + control directly)"
 echo

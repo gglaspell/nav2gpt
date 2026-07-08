@@ -12,7 +12,8 @@
 #   1. Explicit x/y[/qz/qw] passed as arguments (manual override).
 #   2. AUTO-DETECTED live from Gazebo via get_spawn_pose.py — the real spawn
 #      pose, not a guess. This is the default path.
-#   3. A measured fallback (x=-0.07, y=-0.56) if auto-detect can't reach Gazebo.
+#   3. The true house spawn (x=-2.0, y=-0.5, confirmed live from Gazebo) if
+#      auto-detect can't reach the sim.
 #
 # After resolving the pose it waits for AMCL, publishes, and retries until AMCL
 # reports /amcl_pose (accepted) or it times out.
@@ -35,10 +36,12 @@ if [ -z "$X" ]; then
   fi
 fi
 
-# 3. Measured fallback.
+# 3. Fallback = the true house spawn (Gazebo live confirmed x=-1.997, y=-0.5).
+# The old fallback (-0.07,-0.56) was a rough hand-aligned guess ~2 m off in x,
+# which mislocalized the robot and broke planning.
 if [ -z "$X" ]; then
-  X="-0.07"; Y="-0.56"; QZ="0.0"; QW="1.0"
-  SOURCE="measured fallback"
+  X="-2.0"; Y="-0.5"; QZ="0.0"; QW="1.0"
+  SOURCE="house spawn fallback"
 fi
 # Fill any missing orientation with "facing +x".
 QZ="${QZ:-0.0}"; QW="${QW:-1.0}"
