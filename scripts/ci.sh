@@ -2,10 +2,10 @@
 #
 # ci.sh — the "run every time we push" driver (run INSIDE the Humble container).
 #
-#   bash scripts/ci.sh
+#   bash scripts/ci.sh                     # test the newest-pushed branch (default)
+#   bash scripts/ci.sh test/main-baseline  # test a SPECIFIC branch (e.g. main's baseline)
 #
-# Auto-detects the newest branch, hard-syncs to it, then runs all phases and
-# pushes every report:
+# Hard-syncs to the target branch, then runs all phases and pushes every report:
 #   1. build_ws.sh          colcon build (+ build report)
 #   2. run_tests.sh         pytest + main-vs-branch comparison
 #   3. integration_test.sh  guided live run (Gazebo/Nav2/…) + integration report
@@ -24,13 +24,21 @@ main() {
   REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
   cd "$REPO_ROOT"
 
-  # Sync to whatever we last pushed.
+  # Sync to the target branch: an explicit arg if given, else the newest pushed.
   git config remote.origin.fetch '+refs/heads/*:refs/remotes/origin/*'
   git fetch --prune origin
-  B="$(git for-each-ref --sort=-committerdate --format='%(refname:short)' refs/remotes/origin \
-        | grep -vE '^origin$|/HEAD$' | head -n1 | sed 's#^origin/##')"
+  if [ -n "${1:-}" ]; then
+    B="$1"
+  else
+    B="$(git for-each-ref --sort=-committerdate --format='%(refname:short)' refs/remotes/origin \
+          | grep -vE '^origin$|/HEAD$' | head -n1 | sed 's#^origin/##')"
+  fi
   if [ -z "$B" ]; then
     echo "Could not determine a branch to test." >&2
+    return 2
+  fi
+  if ! git rev-parse --verify "origin/$B" >/dev/null 2>&1; then
+    echo "Branch 'origin/$B' does not exist." >&2
     return 2
   fi
   echo ">> testing branch: $B"
