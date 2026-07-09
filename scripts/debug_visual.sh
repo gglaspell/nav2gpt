@@ -21,6 +21,8 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$REPO_ROOT"
 
 BRANCH="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo unknown)"
+TS="$(date -u +%Y%m%dT%H%M%SZ)"
+SLUG="$(echo "$BRANCH" | tr '/ ' '__')"
 # FORCE burger: Nav2 loads the burger URDF + burger-tuned params, and the burger
 # fits the house doorways (the waffle wedges in them).
 TURTLEBOT3_MODEL=burger
@@ -56,7 +58,9 @@ else
   exit 1
 fi
 
-LOG_DIR="$(mktemp -d)"
+# Persistent, timestamped log dir: debug output survives a reboot and sits with
+# the other reports (single-machine flow — no hunting in /tmp).
+LOG_DIR="$REPO_ROOT/reports/logs/debug_${SLUG}_${TS}"; mkdir -p "$LOG_DIR"
 PIDS=()
 cleanup() {
   echo

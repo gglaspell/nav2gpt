@@ -6,9 +6,9 @@
 # terminal window per stack component (Gazebo, Nav2, API server, voice node),
 # pauses at each step with an instruction, snaps a screenshot when you confirm
 # it, then asks you to confirm whether the robot actually did the right thing.
-# The verdict + your notes + all screenshots are written under reports/ (pushed
-# by push_report.sh, same as the automated suite) — handy documentation for
-# writeups/slideshows, not just a pass/fail signal.
+# The verdict + your notes + all screenshots are written under reports/ for local
+# review — handy documentation for writeups/slideshows, not just a pass/fail
+# signal (publish with push_report.sh only if you want them on GitHub).
 #
 #   ./scripts/integration_test.sh
 #
@@ -162,13 +162,15 @@ TERM_EMU=""
 for t in gnome-terminal konsole xfce4-terminal xterm; do
   command -v "$t" >/dev/null 2>&1 && { TERM_EMU="$t"; break; }
 done
-LOG_DIR="$(mktemp -d)"   # live per-terminal logs (full, ephemeral)
+# Full live per-terminal logs, persistent under reports/ so they're reviewable
+# locally after the run (finalize() writes a noise-filtered tail alongside them).
+LOG_DIR="$REPORT_DIR/logs/${SLUG}_${TS}/raw"; mkdir -p "$LOG_DIR"
 LAUNCH_PATTERNS=()       # for teardown
 
 # Every launched component tees its stdout+stderr to $LOG_DIR/<title>.log while
 # still showing in its window, so the output of all four terminals (plus the
 # localization step's autodetect diagnostics) is captured. finalize() copies a
-# capped tail of each into the pushed report — no more retyping errors by hand.
+# capped tail of each into the report — no more retyping errors by hand.
 open_stack_terminal() {   # open_stack_terminal <title> <ros2 command...>
   local title="$1"; shift
   local cmd="$*"
@@ -239,8 +241,9 @@ finalize() {
   capture_screenshot "final-state" gzclient Gazebo rviz2 RViz
   capture_contact_sheet
 
-  # Collect each terminal's output: copy a capped tail into the pushed report
-  # dir (full live logs can be huge/noisy) so the logs travel to GitHub.
+  # Collect each terminal's output: write a noise-filtered tail next to the raw
+  # logs (full live logs can be huge/noisy) so the report stays readable while
+  # the complete capture stays on disk under raw/.
   local pushlog="$REPORT_DIR/logs/${SLUG}_${TS}"
   local f
   for f in "$LOG_DIR"/*.log; do

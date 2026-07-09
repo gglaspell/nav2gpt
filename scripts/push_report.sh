@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 #
-# push_report.sh — commit the latest test report and push it to GitHub.
+# push_report.sh — OPTIONAL: publish the latest test report(s) to GitHub.
 #
-# Run this right after run_tests.sh, on the Linux machine. It commits ONLY the
-# report file(s) under reports/ (never your source changes) and pushes to the
-# current branch on origin.
+# Not part of the normal local loop (ci.sh no longer calls it). Run it by hand
+# only when you actually want a report on the remote. It commits ONLY the report
+# file(s) under reports/ (never your source changes) and pushes the current branch.
 #
 # Usage:
 #   ./scripts/push_report.sh                 # push ALL new reports in reports/

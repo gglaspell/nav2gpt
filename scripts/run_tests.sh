@@ -123,7 +123,7 @@ echo
 echo "----------------------------------------------------------------"
 echo "Result:  $RESULT"
 echo "Report:  $REPORT"
-echo "Next:    ./scripts/push_report.sh   (pushes this report to GitHub)"
+echo "Publish: ./scripts/push_report.sh   (optional — only if you want it on GitHub)"
 echo "Visual:  ./scripts/debug_visual.sh  (watch the robot on the Linux box)"
 echo "----------------------------------------------------------------"
 

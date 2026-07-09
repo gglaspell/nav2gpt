@@ -19,7 +19,7 @@ cd "$REPO_ROOT"
 echo "== nav2gpt host setup =="
 
 # 1. Docker usable without sudo?
-if docker run --rm hello-world >/dev/null 2>&1; then
+if docker info >/dev/null 2>&1; then
   echo "Docker: ok"
 else
   echo "Docker: NOT usable yet. Install it and/or add yourself to the docker group:"
@@ -44,17 +44,8 @@ if command -v code >/dev/null 2>&1; then
     && echo "VS Code: Dev Containers extension ready"
 fi
 
-# 4. Make sure all branches are visible, then check out the newest one
-git config remote.origin.fetch '+refs/heads/*:refs/remotes/origin/*'
-git fetch --prune origin
-B="$(git for-each-ref --sort=-committerdate --format='%(refname:short)' refs/remotes/origin \
-      | grep -vE '^origin$|/HEAD$' | head -n1 | sed 's#^origin/##')"
-if [ -n "$B" ]; then
-  echo "Checking out newest branch: $B"
-  git checkout -B "$B" "origin/$B"
-fi
-
-# 5. Open VS Code on this folder
+# 4. Open VS Code on this folder (optional — you can also work straight from the
+#    CLI container: docker exec -it nav2gpt-humble bash)
 if command -v code >/dev/null 2>&1; then
   code "$REPO_ROOT"
   echo

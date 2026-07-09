@@ -6,10 +6,10 @@
 #   ./scripts/compare_with_main.sh
 #
 # Two parts:
-#   1. STATIC — categorize the diff vs origin/main into "functional" (robot code)
+#   1. STATIC — categorize the diff vs main into "functional" (robot code)
 #      vs "tooling/docs". A tooling-only branch (like dev-setup) should show ZERO
 #      functional changes  ->  functional parity with main.
-#   2. FUNCTIONAL — run feature_check() against a clean checkout of origin/main
+#   2. FUNCTIONAL — run feature_check() against a clean checkout of main
 #      and against this branch, then diff the results. Hone feature_check() per
 #      feature so it exercises exactly the behavior this branch adds/changes.
 #
@@ -23,7 +23,7 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$REPO_ROOT"
 
 BRANCH="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo unknown)"
-BASE="origin/main"
+BASE="main"   # local branch — the comparison stays offline
 
 # Path prefixes that constitute actual robot/runtime behavior. Anything else
 # (scripts/, tests/, reports/, README, requirements, .project) is tooling/docs.
@@ -70,10 +70,8 @@ echo "================================================================"
 echo " compare: $BRANCH  vs  $BASE"
 echo "================================================================"
 
-git fetch origin main --quiet 2>/dev/null || echo "  (warning: could not fetch origin/main; using cached ref)"
-
 if ! git rev-parse --verify "$BASE" >/dev/null 2>&1; then
-  echo "Cannot resolve $BASE — is 'origin' set and fetched?" >&2
+  echo "Cannot resolve local branch '$BASE'. Create it, e.g.: git branch $BASE origin/$BASE" >&2
   exit 2
 fi
 
