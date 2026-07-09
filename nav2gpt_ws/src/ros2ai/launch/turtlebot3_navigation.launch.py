@@ -10,10 +10,13 @@ from launch.launch_description_sources import PythonLaunchDescriptionSource
 
 
 def generate_launch_description():
+   # Spawn in mapped free space. The stock spawn (-2.0, -0.5) sits in an area the
+   # map never covered, so AMCL has no features there and navigation can't start.
    turtlebot3_house = IncludeLaunchDescription(
       PythonLaunchDescriptionSource([os.path.join(
          get_package_share_directory('turtlebot3_gazebo'), 'launch'),
-         '/turtlebot3_house.launch.py'])
+         '/turtlebot3_house.launch.py']),
+      launch_arguments={'x_pose': '-1.0', 'y_pose': '1.0'}.items()
       )
 #    turtlesim_world_2 = IncludeLaunchDescription(
 #       PythonLaunchDescriptionSource([os.path.join(
