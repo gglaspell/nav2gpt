@@ -4,6 +4,32 @@
 
 ---
 
+## What's new (nav-feedback)
+
+Builds on the **dev-setup** baseline:
+
+- **It navigates.** Fixed the model/costmap mismatch (Gazebo spawns a *burger*
+  while Nav2 was set up for a *waffle*), the duplicate `robot_state_publisher`,
+  the AMCL initial pose, the map-to-world alignment, and the LLM goal schema — so
+  the robot reliably reaches the kitchen, by a direct goal and by voice.
+- **Reproducible setup** — a devcontainer, a real `requirements.txt`, and the
+  step-by-step instructions below.
+- **A build/test/report harness** (`scripts/`): `ci.sh`, pytest smoke tests, a
+  main-vs-branch comparison, and a guided integration run, all producing reports.
+- **Honest results** — the `goToPose` API server returns Nav2's real outcome.
+
+And this branch adds richer navigation feedback:
+
+- **Spoken feedback** — the robot announces progress ("Halfway to the kitchen.")
+  and speaks the result via espeak; the destination is named (a known room) or its
+  coordinates.
+- **Status strings** — `goToPose` returns `SUCCEEDED` / `FAILED` / `CANCELED` /
+  `REJECTED`, and the voice node reports a human sentence, not a bare true/false.
+- **Timeout cancellation** — a configurable `nav_timeout_sec` cancels a goal that
+  runs too long.
+
+---
+
 ## Architecture Overview
 
 ```text
