@@ -3,7 +3,7 @@
 import rclpy
 from rclpy.node import Node
 
-from nav2_simple_commander.robot_navigator import BasicNavigator, TaskResult
+from nav2_simple_commander.robot_navigator import BasicNavigator
 from std_srvs.srv import SetBool
 from geometry_msgs.msg import Pose, PoseStamped
 from ros2ai_msgs.srv import Nav2Gpt
@@ -41,7 +41,7 @@ class Nav2ApiServer(Node):
             self.get_logger().error(
                 f"goToPose REJECTED for ({req.x:.2f}, {req.y:.2f}) — goal likely "
                 "in a lethal/inflated cell, or Nav2 is not active yet.")
-            res.status = False
+            res.status = "REJECTED"
             return res
 
         self.get_logger().info(
@@ -52,7 +52,9 @@ class Nav2ApiServer(Node):
 
         result = self.nav2_client.getResult()
         self.get_logger().info(f"goToPose result: {result}")
-        res.status = (result == TaskResult.SUCCEEDED)
+        # Report the real outcome name (SUCCEEDED / CANCELED / FAILED / UNKNOWN)
+        # so the caller can say more than just "true/false".
+        res.status = result.name
         return res
 
 def main(args=None):
