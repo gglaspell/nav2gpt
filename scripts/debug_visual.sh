@@ -33,11 +33,15 @@ export TURTLEBOT3_MODEL
 # so the goal here is a baseline: prove the stack still comes up and drives.
 feature_demo_hint() {
   cat <<'EOF'
-FEATURE: feature/dev-setup (baseline — no new robot behavior)
-WHAT TO DO:   When prompted, press Enter and say e.g. "go to the kitchen".
-WATCH FOR:    Gazebo shows the TurtleBot3 planning a path and driving to the
-              goal, exactly as on main. This branch only adds tooling, so the
-              robot must behave identically to main.
+FEATURE: feature/nav-feedback (spoken result + progress + timeout cancel)
+WHAT TO DO:   Say "go to the kitchen" (or press 'x' for the canned transcript).
+              To see the timeout-cancel, relaunch the API server with a short
+              limit:  ros2 run ros2ai nav2_api_server --ros-args -p nav_timeout_sec:=5.0
+WATCH FOR:    - The API-server terminal announces "Halfway to the goal." and
+                speaks the final result via espeak.
+              - The service now returns a status STRING (SUCCEEDED / CANCELED /
+                FAILED); the voice node prints a human sentence, not a bare bool.
+              - With the short timeout, the goal is CANCELED mid-run.
 EOF
 }
 # ─────────────────────────────────────────────────────────────────────────────

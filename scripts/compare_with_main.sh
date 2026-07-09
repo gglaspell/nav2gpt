@@ -42,27 +42,18 @@ is_functional() {   # is_functional <path> -> 0 if it affects robot behavior
 # description of the behavior under test on stdout. The script runs this once for
 # main and once for this branch and diffs the two outputs.
 #
-# dev-setup adds no robot behavior, so its check just confirms the robot source
-# is untouched — parity is already proven by Part 1. Later feature branches
-# replace the body below with a real probe, e.g. for feature/nav-feedback:
-#
-#     # start the api server, call goToPose with an unreachable goal,
-#     # print the returned status string:
-#     ( cd "$1/nav2gpt_ws" && ... ros2 service call ... ) | grep -o 'status:.*'
-#
+# feature/nav-feedback changes robot behavior, so this probe reports the markers
+# that distinguish it from main. Static probes (reading the checked-out source)
+# are deterministic and need no live Nav2 stack, so main vs branch differ cleanly.
 feature_check() {
   local tree="$1"
-  # Content hash of every FUNCTIONAL_PREFIXES path = a proxy for "does the
-  # robot's actual runtime behavior differ?". Uses git's own tree object ids
-  # (deterministic, portable, no sha1sum/shasum dependency). Must cover the
-  # same paths as FUNCTIONAL_PREFIXES above, or a change there won't show up
-  # here and Part 1/Part 2 will disagree.
-  local pre id
-  for pre in "${FUNCTIONAL_PREFIXES[@]:-}"; do
-    [ -n "$pre" ] || continue
-    id="$(git -C "$tree" rev-parse "HEAD:${pre%/}" 2>/dev/null)"
-    [ -n "$id" ] && echo "$pre=$id"
-  done
+  local srv="$tree/nav2gpt_ws/src/ros2ai_msgs/srv/Nav2Gpt.srv"
+  local api="$tree/nav2gpt_ws/src/ros2ai/ros2ai/nav2_api_server.py"
+  # nav-feedback: status is a string (not bool), the timeout is configurable,
+  # and results/progress are spoken.
+  echo "status_type=$(grep -oE '(bool|string) status' "$srv" 2>/dev/null | awk '{print $1}')"
+  echo "timeout_param=$(grep -c 'nav_timeout_sec' "$api" 2>/dev/null)"
+  echo "tts_calls=$(grep -c 'speak(' "$api" 2>/dev/null)"
 }
 # ─────────────────────────────────────────────────────────────────────────────
 
