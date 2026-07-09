@@ -9,6 +9,7 @@ from geometry_msgs.msg import Pose, PoseStamped
 from ros2ai_msgs.srv import Nav2Gpt
 from ros2ai.status_report import status_message, progress_phrase
 from ros2ai.speech import speak
+from ros2ai.locations import destination_label
 from tf_transformations import quaternion_from_euler
 
 import numpy as np
@@ -52,6 +53,7 @@ class Nav2ApiServer(Node):
         self.get_logger().info(
             f"Navigating to ({req.x:.2f}, {req.y:.2f}, {req.theta:.0f} deg)...")
         timeout = self.get_parameter("nav_timeout_sec").value
+        dest = destination_label(req.x, req.y)
         start_dist = None
         announced = set()
         canceled = False
@@ -69,7 +71,7 @@ class Nav2ApiServer(Node):
             # Spoken progress as the robot closes in on the goal.
             if start_dist is None and fb.distance_remaining > 0.0:
                 start_dist = fb.distance_remaining
-            phrase = progress_phrase(fb.distance_remaining, start_dist, announced)
+            phrase = progress_phrase(fb.distance_remaining, start_dist, announced, dest)
             if phrase:
                 self.get_logger().info(phrase)
                 speak(phrase)
@@ -79,7 +81,7 @@ class Nav2ApiServer(Node):
         # Report the real outcome name (SUCCEEDED / CANCELED / FAILED / UNKNOWN)
         # so the caller can say more than just "true/false", and announce it.
         res.status = result.name
-        speak(status_message(res.status, req.x, req.y))
+        speak(status_message(res.status, dest))
         return res
 
 def main(args=None):

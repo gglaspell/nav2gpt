@@ -7,6 +7,7 @@ from sensor_msgs.msg import Image
 from cv_bridge import CvBridge
 from ros2ai_msgs.srv import Nav2Gpt
 from ros2ai.status_report import status_message
+from ros2ai.locations import destination_label
 
 from langchain_ollama import OllamaLLM
 # from PIL import Image
@@ -121,7 +122,7 @@ class NavGpt(Node):
             rclpy.spin_until_future_complete(self, self.future)
             response = self.future.result()
             status = response.status if response is not None else "NO_RESPONSE"
-            print(status_message(status, x, y))
+            print(status_message(status, destination_label(x, y)))
             # Implement your logic to execute goToPose command
         elif service_name == "wait":
             print("Executing wait")
