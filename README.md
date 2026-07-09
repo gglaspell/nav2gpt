@@ -4,6 +4,23 @@
 
 ---
 
+## What's new (dev-setup)
+
+This branch turns the stock project into a working baseline:
+
+- **It navigates.** Fixed the model/costmap mismatch (Gazebo spawns a *burger*
+  while Nav2 was set up for a *waffle*), the duplicate `robot_state_publisher`,
+  the AMCL initial pose, the map-to-world alignment, and the LLM goal schema — so
+  the robot reliably reaches the kitchen, by a direct goal and by voice.
+- **Reproducible setup** — a devcontainer, a real `requirements.txt`, and the
+  step-by-step instructions below.
+- **A build/test/report harness** (`scripts/`): `ci.sh`, pytest smoke tests, a
+  main-vs-branch comparison, and a guided integration run, all producing reports.
+- **Honest results** — the `goToPose` API server returns Nav2's real outcome
+  instead of a hardcoded success.
+
+---
+
 ## Architecture Overview
 
 ```text
