@@ -20,5 +20,12 @@ nav2gpt_ws/src/ros2ai/ros2ai/test.mp3
 # Local planning / working notes — never pushed upstream
 .project/
 
+# Generated test artifacts (reports, screenshots, logs) — local working area,
+# reviewed on this machine, not committed/pushed
+reports/
+
+# Local dev/agent tooling — not shipped
+dev/
+
 # Test harness bookkeeping
 .pytest_cache/

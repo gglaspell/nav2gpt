@@ -1,6 +1,0 @@
-=== 2-nav2 ===
-[INFO] [launch]: All log files can be found below /home/ubuntu/.ros/log/2026-07-08-17-50-52-421632-bragg3d-Precision-7560-2159
-[INFO] [launch]: Default logging verbosity is set to INFO
-[ERROR] [launch]: Caught exception in launch (see debug for traceback): Caught multiple exceptions when trying to load file of format [py]:
- - FileNotFoundError: [Errno 2] No such file or directory: '/opt/ros/humble/share/nav2_bringup/urdf/turtlebot3_burger.urdf'
- - InvalidFrontendLaunchFileError: The launch file may have a syntax error, or its format is unknown
