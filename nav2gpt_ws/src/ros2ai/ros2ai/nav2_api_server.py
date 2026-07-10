@@ -9,7 +9,7 @@ from geometry_msgs.msg import Pose, PoseStamped
 from ros2ai_msgs.srv import Nav2Gpt
 from ros2ai.status_report import status_message, progress_phrase
 from ros2ai.speech import speak
-from ros2ai.locations import destination_label
+from ros2ai.locations import destination_label, default_store_path
 from tf_transformations import quaternion_from_euler
 
 import numpy as np
@@ -22,6 +22,9 @@ class Nav2ApiServer(Node):
         # Cancel a goal that runs longer than this many seconds. Override with:
         #   ros2 run ros2ai nav2_api_server --ros-args -p nav_timeout_sec:=30.0
         self.declare_parameter("nav_timeout_sec", 120.0)
+        # Announce arrivals by room name — including rooms saved at runtime — by
+        # reading the same persistent store the voice node writes to.
+        self.store_path = default_store_path()
         # The node otherwise runs silently; announce readiness so operators know
         # the server came up (matches the "ready" line documented in the README).
         self.get_logger().info("Nav2 API Server is ready")
@@ -53,7 +56,7 @@ class Nav2ApiServer(Node):
         self.get_logger().info(
             f"Navigating to ({req.x:.2f}, {req.y:.2f}, {req.theta:.0f} deg)...")
         timeout = self.get_parameter("nav_timeout_sec").value
-        dest = destination_label(req.x, req.y)
+        dest = destination_label(req.x, req.y, path=self.store_path)
         start_dist = None
         announced = set()
         canceled = False
