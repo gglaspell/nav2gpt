@@ -89,7 +89,9 @@ def destination_label(x, y, tol=0.5, path=None):
     named too.
     """
     name = nearest_room(load_locations(path), x, y, tol)
-    return name if name else f"({x}, {y})"
+    # Round the fallback: this string is spoken aloud, and a raw AMCL pose would
+    # otherwise be read out to 15 decimal places.
+    return name if name else f"({round(x, 2)}, {round(y, 2)})"
 
 
 def _num(v):

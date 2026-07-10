@@ -91,6 +91,11 @@ def test_destination_label_names_saved_room(tmp_path):
     assert destination_label(9.0, 9.0, path=path) == "(9.0, 9.0)"
 
 
+def test_destination_label_rounds_coordinate_fallback():
+    # spoken aloud — a raw AMCL pose must not be read out to 15 decimals
+    assert destination_label(-0.9999400283, 0.9999990005) == "(-1.0, 1.0)"
+
+
 # --- LLM room description -------------------------------------------------
 def test_describe_rooms_renders_clean_numbers():
     line = describe_rooms({"the kitchen": (-4.0, 4.0, 180.0)})
