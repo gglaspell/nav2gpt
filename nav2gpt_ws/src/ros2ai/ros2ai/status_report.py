@@ -21,6 +21,24 @@ def status_message(status, destination):
     return f"Could not reach {destination}: navigation ended with status {status}."
 
 
+def where_am_i_message(label):
+    """Spoken answer to "where am I?". `label` is a room name or a coordinate
+    string from locations.destination_label; a coordinate string starts with "("."""
+    if label.startswith("("):
+        return f"You are at {label}."
+    return f"You are in {label}."
+
+
+def saved_location_message(name, x, y):
+    """Confirmation spoken after "save this location as <name>"."""
+    return f"Saved {name} at ({x:.2f}, {y:.2f})."
+
+
+def need_name_message():
+    """Asked when a save command arrives without a name."""
+    return "I need a name for this location. Try: save this location as the office."
+
+
 def progress_phrase(distance_remaining, start_distance, announced, destination):
     """Milestone phrase to announce as the robot closes in, or None.
 
