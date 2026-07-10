@@ -4,6 +4,14 @@
 
 ---
 
+## What's new (dynamic-locations)
+
+Builds on the **nav-feedback** features below.
+
+_Coming on this branch._
+
+---
+
 ## What's new (nav-feedback)
 
 Builds on the **dev-setup** baseline:
