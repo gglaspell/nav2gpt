@@ -33,15 +33,17 @@ export TURTLEBOT3_MODEL
 # so the goal here is a baseline: prove the stack still comes up and drives.
 feature_demo_hint() {
   cat <<'EOF'
-FEATURE: feature/nav-feedback (spoken result + progress + timeout cancel)
-WHAT TO DO:   Say "go to the kitchen" (or press 'x' for the canned transcript).
-              To see the timeout-cancel, relaunch the API server with a short
-              limit:  ros2 run ros2ai nav2_api_server --ros-args -p nav_timeout_sec:=5.0
-WATCH FOR:    - The API-server terminal announces "Halfway to the goal." and
-                speaks the final result via espeak.
-              - The service now returns a status STRING (SUCCEEDED / CANCELED /
-                FAILED); the voice node prints a human sentence, not a bare bool.
-              - With the short timeout, the goal is CANCELED mid-run.
+FEATURE: feature/dynamic-locations (save this location + where am I?)
+WHAT TO DO:   At the voice prompt you can now type a command instead of speaking
+              (dev aid). Try, in order:
+                1. "where am I"                     -> names the nearest room
+                2. "save this location as the desk" -> records the current pose
+                3. drive elsewhere, then "where am I" and "go to the desk"
+              Saved rooms live in ~/.nav2gpt/locations.json (NAV2GPT_LOCATIONS).
+WATCH FOR:    - "where am I" answers with a room name (or coordinates) and speaks it.
+              - After saving, "go to <name>" navigates there — the saved room is
+                fed into the LLM prompt, so it's a real nav target now.
+              - locations.json gains the new entry alongside the kitchen/bedroom.
 EOF
 }
 # ─────────────────────────────────────────────────────────────────────────────

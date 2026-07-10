@@ -6,9 +6,23 @@
 
 ## What's new (dynamic-locations)
 
-Builds on the **nav-feedback** features below.
+Builds on the **nav-feedback** features below, and replaces the two hardcoded
+rooms with a saved set you grow by voice:
 
-_Coming on this branch._
+- **"Save this location as _\<name\>_"** — records the robot's current pose (from
+  AMCL) under that name and persists it to a JSON file
+  (`~/.nav2gpt/locations.json`, override with `NAV2GPT_LOCATIONS`). It survives
+  restarts and is seeded with the kitchen and bedroom, so nothing breaks on a
+  fresh machine.
+- **"Where am I?"** — answers with the nearest known room (or the coordinates if
+  you're not near one) and speaks it aloud.
+- **Saved rooms become nav targets** — the LLM prompt is built from the live
+  store, so once you save "the desk" you can say "go to the desk". Progress and
+  arrival feedback name it too.
+
+These two commands are intercepted before the LLM (they act on the current pose,
+not a destination), so they're deterministic. In dev mode you can now type a
+command at the prompt instead of speaking it.
 
 ---
 
