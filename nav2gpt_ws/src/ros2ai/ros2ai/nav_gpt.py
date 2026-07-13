@@ -16,6 +16,9 @@ from ros2ai.locations import (
     describe_rooms)
 from ros2ai.intents import parse_intent
 from ros2ai.pose_utils import yaw_degrees
+from ros2ai.routing import (
+    resolve_route, step_announcement, route_summary, followup_ack)
+from ros2ai.route_memory import RouteMemory
 from ros2ai.speech import speak
 
 from langchain_ollama import OllamaLLM
@@ -54,6 +57,23 @@ def parse_commands(text):
         if isinstance(parsed, list):
             return parsed
     return []
+
+
+def _command_goal(command):
+    """A ``{"x","y","theta"}`` goal from a parsed goToPose command, or None.
+
+    Used to remember what the LLM path just drove to. Tolerant of a missing
+    slash or malformed args so a stray command never crashes the remembering.
+    """
+    try:
+        service = str(command.get("service", "")).strip().lstrip("/")
+        if service != "goToPose":
+            return None
+        args = command["args"]
+        return {"x": float(args["x"]), "y": float(args["y"]),
+                "theta": float(args["theta"])}
+    except (AttributeError, KeyError, TypeError, ValueError):
+        return None
 
 
 def _first_json_block(text):
@@ -113,6 +133,9 @@ class NavGpt(Node):
             PoseWithCovarianceStamped, "/amcl_pose", self._pose_clbk, amcl_qos)
         self.store_path = default_store_path()
 
+        # Remembers the last route so "do that again" / "in reverse" can replay it.
+        self.memory = RouteMemory()
+
         self.llm = OllamaLLM(
             model="llama3"
         )  # assuming you have Ollama installed and have llama3 model pulled with `ollama pull llama3 `
@@ -158,21 +181,46 @@ class NavGpt(Node):
             y = args["y"]
             theta = args["theta"]
             print(f"Executing goToPose with x={x}, y={y}, theta={theta}")
-            self.req.x = float(args["x"])
-            self.req.y = float(args["y"])
-            self.req.theta = float(args["theta"])
-            self.future = self.cli.call_async(self.req)
-            rclpy.spin_until_future_complete(self, self.future)
-            response = self.future.result()
-            status = response.status if response is not None else "NO_RESPONSE"
+            status = self._go_to_pose(x, y, theta)
             print(status_message(status, destination_label(x, y, path=self.store_path)))
-            # Implement your logic to execute goToPose command
         elif service_name == "wait":
             print("Executing wait")
             time.sleep(5)
             # Implement your logic to execute wait command
         else:
             print(f"Unknown service: {service}")
+
+    def _go_to_pose(self, x, y, theta):
+        """Send one goToPose goal and return the status string the server reports."""
+        self.req.x = float(x)
+        self.req.y = float(y)
+        self.req.theta = float(theta)
+        future = self.cli.call_async(self.req)
+        rclpy.spin_until_future_complete(self, future)
+        response = future.result()
+        return response.status if response is not None else "NO_RESPONSE"
+
+    def handle_route(self, route):
+        """Drive an ordered list of stops as sequential goToPose goals.
+
+        Announces each stop, stops early if one can't be reached (no point driving
+        on to the next stop from an unknown position), and gives a spoken summary
+        at the end. The route is remembered so a later "do that again" or "run it
+        in reverse" can replay it.
+        """
+        self.memory.remember(route)
+        total = len(route)
+        reached = []
+        for i, stop in enumerate(route, start=1):
+            name = stop.get("name") or destination_label(
+                stop["x"], stop["y"], path=self.store_path)
+            self._say(step_announcement(i, total, name))
+            status = self._go_to_pose(stop["x"], stop["y"], stop["theta"])
+            if status != "SUCCEEDED":
+                self._say(route_summary(reached, name, total))
+                return
+            reached.append(name)
+        self._say(route_summary(reached, None, total))
 
     def _say(self, message):
         """Print and speak a message so feedback shows in the log and aloud."""
@@ -202,7 +250,32 @@ class NavGpt(Node):
         self._say(where_am_i_message(destination_label(x, y, path=self.store_path)))
 
     def handle_navigate(self, transcript_text):
-        """The original LLM path: turn a spoken command into goToPose goals.
+        """Turn a spoken command into navigation, cheapest path first.
+
+        1. A multi-stop route over known rooms ("the kitchen, then the bedroom")
+           resolves against the store and is driven directly — deterministic, no
+           model round-trip.
+        2. A bare follow-up ("do that again", "in reverse") with no room named
+           replays the last route from memory.
+        3. Anything else (a single goal, a novel place, a specific heading) goes
+           to the LLM, exactly as before.
+        """
+        route = resolve_route(transcript_text, load_locations(self.store_path))
+        if len(route) >= 2:
+            self.handle_route(route)
+            return
+
+        if not route:
+            followup = self.memory.resolve_followup(transcript_text)
+            if followup:
+                self._say(followup_ack(followup["mode"]))
+                self.handle_route(followup["route"])
+                return
+
+        self._llm_navigate(transcript_text)
+
+    def _llm_navigate(self, transcript_text):
+        """The LLM path: turn a spoken command into goToPose goals via llama3.
 
         The room coordinates come from the live store (describe_rooms) rather than
         two hardcoded lines, so a location saved at runtime can be a nav target.
@@ -280,8 +353,15 @@ class NavGpt(Node):
         commands = parse_commands(result)
         if not commands:
             print("ERROR: could not parse a command list from the LLM output above.")
+        goals = []
         for command in commands:
             self.execute_command(command)
+            goal = _command_goal(command)
+            if goal:
+                goals.append(goal)
+        # Remember the goals so a later "do that again" works after an LLM command
+        # too, not only after a deterministic multi-stop route.
+        self.memory.remember(goals)
 
     def convert_to_base64(self, pil_image):
         """
