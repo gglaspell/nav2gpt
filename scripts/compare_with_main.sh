@@ -42,11 +42,11 @@ is_functional() {   # is_functional <path> -> 0 if it affects robot behavior
 # description of the behavior under test on stdout. The script runs this once for
 # main and once for this branch and diffs the two outputs.
 #
-# feature/dynamic-locations changes robot behavior, so this probe reports the
+# feature/multi-step-nav changes robot behavior, so this probe reports the
 # markers that distinguish it from main. Static probes (reading the checked-out
 # source) are deterministic and need no live Nav2 stack, so main vs branch differ
-# cleanly. Markers are cumulative — they cover the nav-feedback work this branch
-# builds on as well as the new dynamic-locations work.
+# cleanly. Markers are cumulative — they cover the nav-feedback and
+# dynamic-locations work this branch builds on as well as the new multi-step work.
 feature_check() {
   local tree="$1"
   local srv="$tree/nav2gpt_ws/src/ros2ai_msgs/srv/Nav2Gpt.srv"
@@ -54,6 +54,8 @@ feature_check() {
   local loc="$tree/nav2gpt_ws/src/ros2ai/ros2ai/locations.py"
   local voice="$tree/nav2gpt_ws/src/ros2ai/ros2ai/nav_gpt.py"
   local intents="$tree/nav2gpt_ws/src/ros2ai/ros2ai/intents.py"
+  local routing="$tree/nav2gpt_ws/src/ros2ai/ros2ai/routing.py"
+  local rmem="$tree/nav2gpt_ws/src/ros2ai/ros2ai/route_memory.py"
   # nav-feedback: status is a string (not bool), the timeout is configurable,
   # results/progress are spoken.
   echo "status_type=$(grep -oE '(bool|string) status' "$srv" 2>/dev/null | awk '{print $1}')"
@@ -64,6 +66,11 @@ feature_check() {
   echo "save_location=$(grep -c 'def save_location' "$loc" 2>/dev/null)"
   echo "intents_module=$([ -f "$intents" ] && echo 1 || echo 0)"
   echo "pose_intercept=$(grep -cE 'handle_whereami|amcl_pose' "$voice" 2>/dev/null)"
+  # multi-step-nav: known-room routes are resolved directly, and the last route
+  # is remembered so "do that again" / "in reverse" can replay it.
+  echo "routing_module=$([ -f "$routing" ] && echo 1 || echo 0)"
+  echo "route_memory=$([ -f "$rmem" ] && echo 1 || echo 0)"
+  echo "multi_stop_wired=$(grep -cE 'resolve_route|handle_route' "$voice" 2>/dev/null)"
 }
 # ─────────────────────────────────────────────────────────────────────────────
 

@@ -4,6 +4,24 @@
 
 ---
 
+## What's new (multi-step-nav)
+
+Builds on the **dynamic-locations** features below, adding chained navigation and
+a short memory of what you last asked for:
+
+- **Multi-stop commands** — "go to the kitchen, then the bedroom" is resolved
+  against your saved rooms and driven as one route: each stop is announced
+  ("Heading to the bedroom, stop 2 of 2"), and if a stop can't be reached the
+  robot stops there and says so instead of pressing on from an unknown position.
+- **"Do that again" / "in reverse"** — the last route is remembered, so a bare
+  follow-up replays it (or walks it backwards) without you naming the rooms
+  again.
+- **Deterministic where it can be** — a route over known rooms is resolved
+  straight from the store with no model round-trip; a single goal or a novel
+  place still goes to the LLM as before.
+
+---
+
 ## What's new (dynamic-locations)
 
 Builds on the **nav-feedback** features below, and replaces the two hardcoded
