@@ -4,6 +4,25 @@
 
 ---
 
+## What's new (waypoints)
+
+Builds on **multi-step-nav**, adding two Nav2 route primitives so one command can
+send a whole list of stops as a single task:
+
+- **"Visit / patrol / tour the kitchen and the bedroom"** — Nav2's waypoint
+  follower (`followWaypoints`) visits each room in turn as one route, announcing
+  the plan and confirming it reached them all.
+- **"Go through the kitchen and the bedroom without stopping"** — asks for one
+  continuous pass (`goThroughPoses`). Where the house geometry allows it, it goes
+  straight through; where a continuous path would wedge in a doorway (popping in
+  and out of dead-end rooms), it **falls back to the waypoint follower** so the
+  command still finishes.
+- Both go through a new `followRoute` service that takes a list of poses,
+  alongside the single-pose `goToPose`. The mode is chosen from the phrasing; a
+  plain "the kitchen, then the bedroom" still arrives at each stop in turn.
+
+---
+
 ## What's new (multi-step-nav)
 
 Builds on the **dynamic-locations** features below, adding chained navigation and

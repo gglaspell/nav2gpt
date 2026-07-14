@@ -56,6 +56,7 @@ feature_check() {
   local intents="$tree/nav2gpt_ws/src/ros2ai/ros2ai/intents.py"
   local routing="$tree/nav2gpt_ws/src/ros2ai/ros2ai/routing.py"
   local rmem="$tree/nav2gpt_ws/src/ros2ai/ros2ai/route_memory.py"
+  local follow="$tree/nav2gpt_ws/src/ros2ai_msgs/srv/FollowRoute.srv"
   # nav-feedback: status is a string (not bool), the timeout is configurable,
   # results/progress are spoken.
   echo "status_type=$(grep -oE '(bool|string) status' "$srv" 2>/dev/null | awk '{print $1}')"
@@ -71,6 +72,12 @@ feature_check() {
   echo "routing_module=$([ -f "$routing" ] && echo 1 || echo 0)"
   echo "route_memory=$([ -f "$rmem" ] && echo 1 || echo 0)"
   echo "multi_stop_wired=$(grep -cE 'resolve_route|handle_route' "$voice" 2>/dev/null)"
+  # waypoints: a followRoute (pose-list) service drives followWaypoints /
+  # goThroughPoses, chosen by route_mode, with a continuous-pass fallback.
+  echo "follow_route_srv=$([ -f "$follow" ] && echo 1 || echo 0)"
+  echo "route_mode=$(grep -c 'def route_mode' "$routing" 2>/dev/null)"
+  echo "follow_route_server=$(grep -c 'def follow_route_clbk' "$api" 2>/dev/null)"
+  echo "waypoint_wired=$(grep -cE 'handle_waypoint_route|followRoute' "$voice" 2>/dev/null)"
 }
 # ─────────────────────────────────────────────────────────────────────────────
 
