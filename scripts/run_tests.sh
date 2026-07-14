@@ -46,7 +46,13 @@ fi
 WS_SETUP="$REPO_ROOT/nav2gpt_ws/install/setup.bash"
 if [ -f "$WS_SETUP" ]; then
   # shellcheck disable=SC1090
+  # colcon's setup.bash references unbound vars (e.g. COLCON_TRACE); relax
+  # `set -u` around the source so it can't abort the run. build_ws.sh does the
+  # same in a subshell — here the sourced env must persist for pytest, so the
+  # toggle is inline.
+  set +u
   source "$WS_SETUP" && ROS_STATUS="workspace sourced ($WS_SETUP)"
+  set -u
 fi
 
 # --- collect environment info ------------------------------------------------
