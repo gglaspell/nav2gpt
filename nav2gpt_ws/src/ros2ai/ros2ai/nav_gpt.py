@@ -8,7 +8,7 @@ from rclpy.qos import (
 from sensor_msgs.msg import Image
 from geometry_msgs.msg import PoseWithCovarianceStamped
 from cv_bridge import CvBridge
-from ros2ai_msgs.srv import Nav2Gpt
+from ros2ai_msgs.srv import Nav2Gpt, FollowRoute
 from ros2ai.status_report import (
     status_message, where_am_i_message, saved_location_message, need_name_message)
 from ros2ai.locations import (
@@ -17,7 +17,9 @@ from ros2ai.locations import (
 from ros2ai.intents import parse_intent
 from ros2ai.pose_utils import yaw_degrees
 from ros2ai.routing import (
-    resolve_route, step_announcement, route_summary, followup_ack)
+    resolve_route, step_announcement, route_summary, followup_ack,
+    route_mode, waypoint_plan_phrase, waypoint_summary, travel_headings,
+    through_fallback_phrase)
 from ros2ai.route_memory import RouteMemory
 from ros2ai.speech import speak
 
@@ -117,6 +119,9 @@ class NavGpt(Node):
             self.get_logger().info('service not available, waiting again...')
         self.get_logger().info("connected to goToPose server")
         self.req = Nav2Gpt.Request()
+        # Multi-stop routes (followWaypoints / goThroughPoses) go through a
+        # separate list-of-poses service on the same server.
+        self.route_cli = self.create_client(FollowRoute, 'followRoute')
 
         # Track the robot's estimated pose so "save this location" and "where am I"
         # can answer from the current position. AMCL publishes /amcl_pose latched
@@ -222,6 +227,47 @@ class NavGpt(Node):
             reached.append(name)
         self._say(route_summary(reached, None, total))
 
+    def handle_waypoint_route(self, route, mode):
+        """Drive the whole route as a single Nav2 task — goThroughPoses ("through")
+        or followWaypoints ("waypoints") — via the followRoute service. Nav2 owns
+        the sequencing, so there's one outcome for the route rather than a
+        per-stop tally. The route is remembered like any other."""
+        self.memory.remember(route)
+        names = [stop.get("name") or destination_label(
+            stop["x"], stop["y"], path=self.store_path) for stop in route]
+        self._say(waypoint_plan_phrase(names, mode))
+        if mode == "through":
+            # A continuous pass can't stop to reorient, so aim intermediate stops
+            # along the travel direction.
+            status = self._follow_route(travel_headings(route), "through")
+            if status != "SUCCEEDED":
+                # goThroughPoses wedges on routes that pop in and out of rooms
+                # through tight doorways; fall back to the waypoint follower,
+                # which stops and replans fresh at each stop, so the command
+                # still finishes.
+                self._say(through_fallback_phrase())
+                mode = "waypoints"
+                status = self._follow_route(route, "waypoints")
+        else:
+            # followWaypoints stops at each stop, so it keeps the rooms' stored
+            # arrival headings.
+            status = self._follow_route(route, mode)
+        self._say(waypoint_summary(status, names, mode))
+
+    def _follow_route(self, route, mode):
+        """Call the followRoute service with the pose list; return its status."""
+        if not self.route_cli.wait_for_service(timeout_sec=5.0):
+            return "NO_SERVICE"
+        req = FollowRoute.Request()
+        req.xs = [float(stop["x"]) for stop in route]
+        req.ys = [float(stop["y"]) for stop in route]
+        req.thetas = [float(stop["theta"]) for stop in route]
+        req.mode = mode
+        future = self.route_cli.call_async(req)
+        rclpy.spin_until_future_complete(self, future)
+        response = future.result()
+        return response.status if response is not None else "NO_RESPONSE"
+
     def _say(self, message):
         """Print and speak a message so feedback shows in the log and aloud."""
         print(message)
@@ -254,7 +300,10 @@ class NavGpt(Node):
 
         1. A multi-stop route over known rooms ("the kitchen, then the bedroom")
            resolves against the store and is driven directly — deterministic, no
-           model round-trip.
+           model round-trip. How it's driven depends on the phrasing: "patrol" /
+           "go through" runs one continuous pass (goThroughPoses), "visit" /
+           "waypoints" uses the waypoint follower, and the default arrives at
+           each stop in turn (sequential goToPose).
         2. A bare follow-up ("do that again", "in reverse") with no room named
            replays the last route from memory.
         3. Anything else (a single goal, a novel place, a specific heading) goes
@@ -262,7 +311,11 @@ class NavGpt(Node):
         """
         route = resolve_route(transcript_text, load_locations(self.store_path))
         if len(route) >= 2:
-            self.handle_route(route)
+            mode = route_mode(transcript_text)
+            if mode == "steps":
+                self.handle_route(route)
+            else:
+                self.handle_waypoint_route(route, mode)
             return
 
         if not route:

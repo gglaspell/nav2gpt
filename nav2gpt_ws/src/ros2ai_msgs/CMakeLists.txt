@@ -15,6 +15,7 @@ find_package(rosidl_default_generators REQUIRED)
 
 rosidl_generate_interfaces(${PROJECT_NAME}
   "srv/Nav2Gpt.srv"
+  "srv/FollowRoute.srv"
  )
 
 if(BUILD_TESTING)

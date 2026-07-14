@@ -1,0 +1,11 @@
+# A multi-stop route for Nav2's waypoint follower / pass-through planner.
+# Poses are parallel arrays (same length): the i-th stop is (xs[i], ys[i], thetas[i]),
+# with thetas in degrees to match goToPose. mode selects the Nav2 action:
+#   "through"   -> goThroughPoses  (one continuous pass, don't fully stop)
+#   "waypoints" -> followWaypoints (visit each pose in turn)
+float32[] xs
+float32[] ys
+float32[] thetas
+string mode
+---
+string status
