@@ -71,7 +71,7 @@ def _command_goal(command):
         service = str(command.get("service", "")).strip().lstrip("/")
         if service != "goToPose":
             return None
-        args = command["args"]
+        args = command.get("args") or {}
         return {"x": float(args["x"]), "y": float(args["y"]),
                 "theta": float(args["theta"])}
     except (AttributeError, KeyError, TypeError, ValueError):
@@ -81,10 +81,12 @@ def _command_goal(command):
 def _first_json_block(text):
     """Return the first balanced [...] or {...} block found in text, or None."""
     start = None
+    open_ch = close_ch = None
     for i, ch in enumerate(text):
         if ch in "[{":
             start = i
-            open_ch, close_ch = ch, "]" if ch == "[" else "}"
+            open_ch = ch
+            close_ch = "]" if ch == "[" else "}"
             break
     if start is None:
         return None
@@ -102,9 +104,10 @@ def _first_json_block(text):
 # --- DEV MODE -----------------------------------------------------------
 # Lets you press 'x' at the recording prompt to skip the mic + Whisper and
 # inject a known-good transcript instead (handy when you can't speak out
-# loud, e.g. testing in a quiet office). MUST be flipped to False before
-# merging this branch into main.
-DEV_MODE_CANNED_TRANSCRIPT = True
+# loud, e.g. testing in a quiet office). Controlled by the NAV2GPT_DEV_MODE
+# env var so it can never accidentally ship "on" in production — set
+# NAV2GPT_DEV_MODE=1 locally to enable it.
+DEV_MODE_CANNED_TRANSCRIPT = os.environ.get("NAV2GPT_DEV_MODE") == "1"
 CANNED_TRANSCRIPT = "Go to the kitchen"
 # --------------------------------------------------------------------------
 
@@ -126,7 +129,7 @@ class NavGpt(Node):
         # Track the robot's estimated pose so "save this location" and "where am I"
         # can answer from the current position. AMCL publishes /amcl_pose latched
         # (TRANSIENT_LOCAL) and only republishes on motion, so we must match that
-        # durability — otherwise a subscriber that joins while the robot is still
+        # durability -- otherwise a subscriber that joins while the robot is still
         # never receives the last pose.
         self.current_pose = None
         amcl_qos = QoSProfile(
@@ -144,6 +147,20 @@ class NavGpt(Node):
         self.llm = OllamaLLM(
             model="llama3"
         )  # assuming you have Ollama installed and have llama3 model pulled with `ollama pull llama3 `
+
+        # Load Whisper once at startup instead of per-command; the ~145MB base
+        # model takes several seconds to load and would otherwise stall every
+        # single voice command.
+        self.whisper_model = None
+        if not DEV_MODE_CANNED_TRANSCRIPT:
+            self.get_logger().info("Loading Whisper model...")
+            self.whisper_model = whisper.load_model("base")
+            self.get_logger().info("Whisper model loaded")
+
+        # Cache the room-description prompt fragment; invalidated whenever the
+        # location store changes (save_location / handle_save), so repeated LLM
+        # calls don't re-read and re-format the store from disk every time.
+        self._rooms_cache = None
 
     def _pose_clbk(self, msg):
         self.current_pose = msg.pose.pose
@@ -173,8 +190,12 @@ class NavGpt(Node):
 
     # Function to execute commands
     def execute_command(self, command):
-        service = command["service"]
-        args = command["args"]
+        service = command.get("service")
+        args = command.get("args") or {}
+
+        if not service:
+            print(f"Malformed command, missing 'service': {command}")
+            return
 
         # Normalize: llama3 sometimes emits "goToPose" without the leading slash,
         # which would otherwise fall through to "Unknown service" and silently no-op.
@@ -182,9 +203,13 @@ class NavGpt(Node):
 
         # Execute based on service
         if service_name == "goToPose":
-            x = args["x"]
-            y = args["y"]
-            theta = args["theta"]
+            try:
+                x = args["x"]
+                y = args["y"]
+                theta = args["theta"]
+            except KeyError as e:
+                print(f"goToPose command missing required arg {e}: {command}")
+                return
             print(f"Executing goToPose with x={x}, y={y}, theta={theta}")
             status = self._go_to_pose(x, y, theta)
             print(status_message(status, destination_label(x, y, path=self.store_path)))
@@ -228,8 +253,8 @@ class NavGpt(Node):
         self._say(route_summary(reached, None, total))
 
     def handle_waypoint_route(self, route, mode):
-        """Drive the whole route as a single Nav2 task — goThroughPoses ("through")
-        or followWaypoints ("waypoints") — via the followRoute service. Nav2 owns
+        """Drive the whole route as a single Nav2 task -- goThroughPoses ("through")
+        or followWaypoints ("waypoints") -- via the followRoute service. Nav2 owns
         the sequencing, so there's one outcome for the route rather than a
         per-stop tally. The route is remembered like any other."""
         self.memory.remember(route)
@@ -280,17 +305,20 @@ class NavGpt(Node):
             return
         pose = self.get_current_pose()
         if pose is None:
-            self._say("I can't tell where I am yet — no localization pose available.")
+            self._say("I can't tell where I am yet -- no localization pose available.")
             return
         x, y, theta = pose
         save_location(name, x, y, theta, path=self.store_path)
+        # A new/updated room invalidates the cached prompt fragment used by the
+        # LLM path, so the next LLM call sees the fresh store.
+        self._rooms_cache = None
         self._say(saved_location_message(name, x, y))
 
     def handle_whereami(self):
         """Answer "where am I?" by naming the nearest known room, or the coords."""
         pose = self.get_current_pose()
         if pose is None:
-            self._say("I can't tell where I am yet — no localization pose available.")
+            self._say("I can't tell where I am yet -- no localization pose available.")
             return
         x, y, _ = pose
         self._say(where_am_i_message(destination_label(x, y, path=self.store_path)))
@@ -299,17 +327,19 @@ class NavGpt(Node):
         """Turn a spoken command into navigation, cheapest path first.
 
         1. A multi-stop route over known rooms ("the kitchen, then the bedroom")
-           resolves against the store and is driven directly — deterministic, no
+           resolves against the store and is driven directly -- deterministic, no
            model round-trip. How it's driven depends on the phrasing: "patrol" /
            "go through" runs one continuous pass (goThroughPoses), "visit" /
            "waypoints" uses the waypoint follower, and the default arrives at
            each stop in turn (sequential goToPose).
-        2. A bare follow-up ("do that again", "in reverse") with no room named
+        2. A single known room ("go to the kitchen") also resolves directly and
+           skips the LLM round-trip entirely.
+        3. A bare follow-up ("do that again", "in reverse") with no room named
            replays the last route from memory.
-        3. Anything else (a single goal, a novel place, a specific heading) goes
-           to the LLM, exactly as before.
+        4. Anything else (a novel place, a specific heading) goes to the LLM.
         """
         route = resolve_route(transcript_text, load_locations(self.store_path))
+
         if len(route) >= 2:
             mode = route_mode(transcript_text)
             if mode == "steps":
@@ -318,14 +348,27 @@ class NavGpt(Node):
                 self.handle_waypoint_route(route, mode)
             return
 
-        if not route:
-            followup = self.memory.resolve_followup(transcript_text)
-            if followup:
-                self._say(followup_ack(followup["mode"]))
-                self.handle_route(followup["route"])
-                return
+        if len(route) == 1:
+            # A single known room resolves deterministically too -- no need to
+            # round-trip through the LLM just to re-derive coordinates we
+            # already have.
+            self.handle_route(route)
+            return
+
+        followup = self.memory.resolve_followup(transcript_text)
+        if followup:
+            self._say(followup_ack(followup["mode"]))
+            self.handle_route(followup["route"])
+            return
 
         self._llm_navigate(transcript_text)
+
+    def _rooms_prompt_fragment(self):
+        """Cached room-description text for the LLM prompt; rebuilt only when
+        the store has changed since the last call (see handle_save)."""
+        if self._rooms_cache is None:
+            self._rooms_cache = describe_rooms(load_locations(self.store_path))
+        return self._rooms_cache
 
     def _llm_navigate(self, transcript_text):
         """The LLM path: turn a spoken command into goToPose goals via llama3.
@@ -333,7 +376,7 @@ class NavGpt(Node):
         The room coordinates come from the live store (describe_rooms) rather than
         two hardcoded lines, so a location saved at runtime can be a nav target.
         """
-        rooms = describe_rooms(load_locations(self.store_path))
+        rooms = self._rooms_prompt_fragment()
         prompt = """
         Use this JSON schema to achieve the user's goals:\n\
                 {
@@ -413,8 +456,12 @@ class NavGpt(Node):
             if goal:
                 goals.append(goal)
         # Remember the goals so a later "do that again" works after an LLM command
-        # too, not only after a deterministic multi-stop route.
-        self.memory.remember(goals)
+        # too, not only after a deterministic multi-stop route. Only overwrite
+        # memory when we actually parsed at least one goal -- an empty list (e.g.
+        # a bare "wait" command, or a parse failure) must not wipe out a
+        # perfectly good previously-remembered route.
+        if goals:
+            self.memory.remember(goals)
 
     def convert_to_base64(self, pil_image):
         """
@@ -428,7 +475,7 @@ class NavGpt(Node):
         pil_image.save(buffered, format="JPEG")  # You can change the format if needed
         img_str = base64.b64encode(buffered.getvalue()).decode("utf-8")
         return img_str
-    
+
     def plt_img_base64(self, img_base64):
         """
         Display base64 encoded string as image
@@ -443,18 +490,18 @@ class NavGpt(Node):
     def img_clbk(self, msg: Image):
         try:
             self.img = self.bridge.imgmsg_to_cv2(msg)
-            
-        except:
-            self.get_logger().error("cannot convert the msg to cv2")
+        except Exception as e:
+            self.get_logger().error(f"cannot convert the msg to cv2: {e}")
 
     # def execute_command(self, msg: str):
     #     image_b64 = self.convert_to_base64(self.img)
     #     llm_with_image_context = self.bakllava.bind(images=[image_b64])
     #     llm_with_image_context.invoke("What do you see in the image")
-    
+
 
 def main(args=None):
     rclpy.init(args=args)
+    node = None
     try:
         node = NavGpt()
 
@@ -476,8 +523,7 @@ def main(args=None):
             node.record_audio(filename, duration)
 
             print("Transcribing...")
-            model = whisper.load_model("base")
-            transcription = model.transcribe(filename)
+            transcription = node.whisper_model.transcribe(filename)
             transcript_text = transcription["text"]
             print("Transcription:", transcript_text)
 
@@ -494,4 +540,11 @@ def main(args=None):
         # rclpy.spin(node)
     except Exception as e:
         print(f"Exception: {e}")
-    rclpy.shutdown()
+    finally:
+        if node is not None:
+            node.destroy_node()
+        rclpy.shutdown()
+
+
+if __name__ == '__main__':
+    main()
