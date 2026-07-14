@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 
 import os
+import re
+import tempfile
 
 from ament_index_python.packages import get_package_share_directory
 
@@ -17,6 +19,28 @@ def generate_launch_description():
     bringup_dir = get_package_share_directory('nav2_bringup')
     ros2ai_dir = get_package_share_directory('ros2ai')
     launch_dir = os.path.join(bringup_dir, 'launch')
+
+    # nav2_bringup's default params are tuned for a waffle (robot_radius 0.22),
+    # which over-inflates the burger (radius ~0.105) so the costmap treats it as
+    # too "fat" to fit the house doorways -> the robot wedges and planning fails.
+    # Derive a burger-tuned params file from the installed default by patching
+    # robot_radius + inflation_radius; fall back to the default if unreadable.
+    default_params_file = os.path.join(bringup_dir, 'params', 'nav2_params.yaml')
+    try:
+        with open(default_params_file, 'r') as _f:
+            _params = _f.read()
+        _params, _n_rr = re.subn(r'robot_radius:\s*[0-9.]+', 'robot_radius: 0.12', _params)
+        _params, _n_ir = re.subn(r'inflation_radius:\s*[0-9.]+', 'inflation_radius: 0.35', _params)
+        if _n_rr == 0:
+            print('WARNING [navigation2.launch]: robot_radius not found in nav2_params.yaml; '
+                  'burger footprint NOT applied — costmap may over-inflate. Check params format.')
+        burger_params_file = os.path.join(tempfile.gettempdir(),
+                                          'nav2gpt_burger_nav2_params.yaml')
+        with open(burger_params_file, 'w') as _f:
+            _f.write(_params)
+        params_default = burger_params_file
+    except OSError:
+        params_default = default_params_file
 
     # Create the launch configuration variables
     slam = LaunchConfiguration('slam')
@@ -83,7 +107,7 @@ def generate_launch_description():
 
     declare_params_file_cmd = DeclareLaunchArgument(
         'params_file',
-        default_value=os.path.join(bringup_dir, 'params', 'nav2_params.yaml'),
+        default_value=params_default,
         description='Full path to the ROS2 parameters file to use for all launched nodes')
 
     declare_autostart_cmd = DeclareLaunchArgument(
@@ -109,9 +133,14 @@ def generate_launch_description():
         default_value='True',
         description='Whether to start the simulator')
 
+    # OFF by default: turtlebot3_navigation.launch.py (Terminal 1) already starts
+    # a robot_state_publisher with the correct burger URDF. Running a second one
+    # here caused a conflicting/broken TF tree (its URDF's ${namespace} frame
+    # placeholders were unexpanded, so it published orphaned '${namespace}base_link'
+    # frames and RViz drew the robot away from its real Gazebo pose).
     declare_use_robot_state_pub_cmd = DeclareLaunchArgument(
         'use_robot_state_pub',
-        default_value='True',
+        default_value='False',
         description='Whether to start the robot state publisher')
 
     declare_use_rviz_cmd = DeclareLaunchArgument(
@@ -133,9 +162,11 @@ def generate_launch_description():
         default_value=os.path.join(bringup_dir, 'worlds', 'world_only.model'),
         description='Full path to world model file to load')
 
+    # Inert here (the Gazebo spawner below is commented out — Gazebo comes from
+    # turtlebot3_navigation.launch.py), but kept as burger for consistency.
     declare_robot_name_cmd = DeclareLaunchArgument(
         'robot_name',
-        default_value='turtlebot3_waffle',
+        default_value='turtlebot3_burger',
         description='name of the robot')
 
     declare_robot_sdf_cmd = DeclareLaunchArgument(
@@ -156,9 +187,25 @@ def generate_launch_description():
         cmd=['gzclient'],
         cwd=[launch_dir], output='screen')
 
-    urdf = os.path.join(bringup_dir, 'urdf', 'turtlebot3_waffle.urdf')
+    # Use the URDF matching the model Gazebo actually spawns so the base_link ->
+    # base_scan TF is correct (a mismatched URDF mislocates the laser). nav2_bringup
+    # only ships the waffle URDF, so the burger URDF must come from
+    # turtlebot3_description. Search candidates and use the first that exists;
+    # fall back to nav2_bringup's waffle (always present) so launch never crashes.
+    tb3_model = os.environ.get('TURTLEBOT3_MODEL', 'burger')
+    urdf_candidates = []
+    for _pkg in ('turtlebot3_description', 'nav2_bringup'):
+        try:
+            urdf_candidates.append(os.path.join(
+                get_package_share_directory(_pkg), 'urdf', 'turtlebot3_%s.urdf' % tb3_model))
+        except Exception:  # noqa: BLE001 - package may not be installed
+            pass
+    urdf_candidates.append(os.path.join(bringup_dir, 'urdf', 'turtlebot3_waffle.urdf'))
+    urdf = next((u for u in urdf_candidates if os.path.isfile(u)), urdf_candidates[-1])
     with open(urdf, 'r') as infp:
-        robot_description = infp.read()
+        # turtlebot3_description URDFs template the frame prefix as ${namespace};
+        # expand it to empty (single-robot) so we don't publish '${namespace}base_link'.
+        robot_description = infp.read().replace('${namespace}', '')
 
     start_robot_state_publisher_cmd = Node(
         condition=IfCondition(use_robot_state_pub),

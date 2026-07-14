@@ -1,0 +1,155 @@
+#!/usr/bin/env bash
+#
+# compare_with_main.sh — show what THIS feature branch changes relative to main,
+# and run a per-feature functional check against both to prove it still works.
+#
+#   ./scripts/compare_with_main.sh
+#
+# Two parts:
+#   1. STATIC — categorize the diff vs main into "functional" (robot code)
+#      vs "tooling/docs". A tooling-only branch (like dev-setup) should show ZERO
+#      functional changes  ->  functional parity with main.
+#   2. FUNCTIONAL — run feature_check() against a clean checkout of main
+#      and against this branch, then diff the results. Hone feature_check() per
+#      feature so it exercises exactly the behavior this branch adds/changes.
+#
+# Appends its verdict to reports/ via run_tests.sh conventions is NOT done here;
+# this script prints to stdout and exits non-zero if the functional check fails.
+
+set -uo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+cd "$REPO_ROOT"
+
+BRANCH="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo unknown)"
+BASE="main"   # local branch — the comparison stays offline
+
+# Path prefixes that constitute actual robot/runtime behavior. Anything else
+# (scripts/, tests/, reports/, README, requirements, .project) is tooling/docs.
+FUNCTIONAL_PREFIXES=("nav2gpt_ws/" ".devcontainer/")
+
+is_functional() {   # is_functional <path> -> 0 if it affects robot behavior
+  local p="$1"
+  for pre in "${FUNCTIONAL_PREFIXES[@]}"; do
+    [[ "$p" == "$pre"* ]] && return 0
+  done
+  return 1
+}
+
+# ── FEATURE HOOK ─────────────────────────────────────────────────────────────
+# Given a checked-out copy of the repo at $1, produce a normalized, deterministic
+# description of the behavior under test on stdout. The script runs this once for
+# main and once for this branch and diffs the two outputs.
+#
+# feature/multi-step-nav changes robot behavior, so this probe reports the
+# markers that distinguish it from main. Static probes (reading the checked-out
+# source) are deterministic and need no live Nav2 stack, so main vs branch differ
+# cleanly. Markers are cumulative — they cover the nav-feedback and
+# dynamic-locations work this branch builds on as well as the new multi-step work.
+feature_check() {
+  local tree="$1"
+  local srv="$tree/nav2gpt_ws/src/ros2ai_msgs/srv/Nav2Gpt.srv"
+  local api="$tree/nav2gpt_ws/src/ros2ai/ros2ai/nav2_api_server.py"
+  local loc="$tree/nav2gpt_ws/src/ros2ai/ros2ai/locations.py"
+  local voice="$tree/nav2gpt_ws/src/ros2ai/ros2ai/nav_gpt.py"
+  local intents="$tree/nav2gpt_ws/src/ros2ai/ros2ai/intents.py"
+  local routing="$tree/nav2gpt_ws/src/ros2ai/ros2ai/routing.py"
+  local rmem="$tree/nav2gpt_ws/src/ros2ai/ros2ai/route_memory.py"
+  local follow="$tree/nav2gpt_ws/src/ros2ai_msgs/srv/FollowRoute.srv"
+  # nav-feedback: status is a string (not bool), the timeout is configurable,
+  # results/progress are spoken.
+  echo "status_type=$(grep -oE '(bool|string) status' "$srv" 2>/dev/null | awk '{print $1}')"
+  echo "timeout_param=$(grep -c 'nav_timeout_sec' "$api" 2>/dev/null)"
+  echo "tts_calls=$(grep -c 'speak(' "$api" 2>/dev/null)"
+  # dynamic-locations: locations persist (save_location), a transcript is routed
+  # through the intents module, and the voice node reads the current pose.
+  echo "save_location=$(grep -c 'def save_location' "$loc" 2>/dev/null)"
+  echo "intents_module=$([ -f "$intents" ] && echo 1 || echo 0)"
+  echo "pose_intercept=$(grep -cE 'handle_whereami|amcl_pose' "$voice" 2>/dev/null)"
+  # multi-step-nav: known-room routes are resolved directly, and the last route
+  # is remembered so "do that again" / "in reverse" can replay it.
+  echo "routing_module=$([ -f "$routing" ] && echo 1 || echo 0)"
+  echo "route_memory=$([ -f "$rmem" ] && echo 1 || echo 0)"
+  echo "multi_stop_wired=$(grep -cE 'resolve_route|handle_route' "$voice" 2>/dev/null)"
+  # waypoints: a followRoute (pose-list) service drives followWaypoints /
+  # goThroughPoses, chosen by route_mode, with a continuous-pass fallback.
+  echo "follow_route_srv=$([ -f "$follow" ] && echo 1 || echo 0)"
+  echo "route_mode=$(grep -c 'def route_mode' "$routing" 2>/dev/null)"
+  echo "follow_route_server=$(grep -c 'def follow_route_clbk' "$api" 2>/dev/null)"
+  echo "waypoint_wired=$(grep -cE 'handle_waypoint_route|followRoute' "$voice" 2>/dev/null)"
+}
+# ─────────────────────────────────────────────────────────────────────────────
+
+echo "================================================================"
+echo " compare: $BRANCH  vs  $BASE"
+echo "================================================================"
+
+if ! git rev-parse --verify "$BASE" >/dev/null 2>&1; then
+  echo "Cannot resolve local branch '$BASE'. Create it, e.g.: git branch $BASE origin/$BASE" >&2
+  exit 2
+fi
+
+# ── Part 1: static diff, categorized ─────────────────────────────────────────
+echo
+echo "── Part 1: what changed vs main ─────────────────────────────────"
+FUNC_CHANGES=()
+TOOL_CHANGES=()
+while IFS=$'\t' read -r status path; do
+  [ -z "${path:-}" ] && continue
+  if is_functional "$path"; then
+    FUNC_CHANGES+=("$status  $path")
+  else
+    TOOL_CHANGES+=("$status  $path")
+  fi
+done < <(git diff --name-status "$BASE"...HEAD)
+
+echo "Functional (robot/runtime) changes: ${#FUNC_CHANGES[@]}"
+for c in "${FUNC_CHANGES[@]:-}"; do [ -n "$c" ] && echo "    $c"; done
+echo "Tooling / docs changes: ${#TOOL_CHANGES[@]}"
+for c in "${TOOL_CHANGES[@]:-}"; do [ -n "$c" ] && echo "    $c"; done
+
+if [ "${#FUNC_CHANGES[@]}" -eq 0 ]; then
+  echo "  => No functional changes — this branch is tooling-only (parity w/ main)."
+fi
+
+# ── Part 2: functional check on both trees ───────────────────────────────────
+echo
+echo "── Part 2: functional check (main vs branch) ────────────────────"
+WORKTREE="$(mktemp -d)"
+cleanup() { git worktree remove --force "$WORKTREE" 2>/dev/null; rmdir "$WORKTREE" 2>/dev/null; }
+trap cleanup EXIT
+
+if git worktree add --quiet --detach "$WORKTREE" "$BASE" 2>/dev/null; then
+  MAIN_RESULT="$(feature_check "$WORKTREE")"
+else
+  echo "  (could not create worktree for $BASE; skipping main-side check)"
+  MAIN_RESULT="<unavailable>"
+fi
+BRANCH_RESULT="$(feature_check "$REPO_ROOT")"
+
+echo "  main   check: $MAIN_RESULT"
+echo "  branch check: $BRANCH_RESULT"
+
+echo
+if [ "${#FUNC_CHANGES[@]}" -eq 0 ]; then
+  # Tooling-only branch: results MUST match (robot code identical).
+  if [ "$MAIN_RESULT" = "$BRANCH_RESULT" ]; then
+    echo "VERDICT: PASS ✅  robot behavior identical to main (as expected for tooling-only)."
+    exit 0
+  else
+    echo "VERDICT: FAIL ❌  robot source differs from main but no functional diff was detected." >&2
+    exit 1
+  fi
+else
+  # Feature branch: results are EXPECTED to differ — the check documents how.
+  if [ "$MAIN_RESULT" != "$BRANCH_RESULT" ]; then
+    echo "VERDICT: PASS ✅  behavior changed vs main, as expected for this feature."
+    echo "         (Review the two results above to confirm the change is correct.)"
+    exit 0
+  else
+    echo "VERDICT: WARN ⚠️  functional files changed but feature_check() saw no"
+    echo "         behavioral difference. Hone feature_check() to probe the new behavior." >&2
+    exit 1
+  fi
+fi

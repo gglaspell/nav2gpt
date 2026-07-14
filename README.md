@@ -4,6 +4,91 @@
 
 ---
 
+## What's new (waypoints)
+
+Builds on **multi-step-nav**, adding two Nav2 route primitives so one command can
+send a whole list of stops as a single task:
+
+- **"Visit / patrol / tour the kitchen and the bedroom"** — Nav2's waypoint
+  follower (`followWaypoints`) visits each room in turn as one route, announcing
+  the plan and confirming it reached them all.
+- **"Go through the kitchen and the bedroom without stopping"** — asks for one
+  continuous pass (`goThroughPoses`). Where the house geometry allows it, it goes
+  straight through; where a continuous path would wedge in a doorway (popping in
+  and out of dead-end rooms), it **falls back to the waypoint follower** so the
+  command still finishes.
+- Both go through a new `followRoute` service that takes a list of poses,
+  alongside the single-pose `goToPose`. The mode is chosen from the phrasing; a
+  plain "the kitchen, then the bedroom" still arrives at each stop in turn.
+
+---
+
+## What's new (multi-step-nav)
+
+Builds on the **dynamic-locations** features below, adding chained navigation and
+a short memory of what you last asked for:
+
+- **Multi-stop commands** — "go to the kitchen, then the bedroom" is resolved
+  against your saved rooms and driven as one route: each stop is announced
+  ("Heading to the bedroom, stop 2 of 2"), and if a stop can't be reached the
+  robot stops there and says so instead of pressing on from an unknown position.
+- **"Do that again" / "in reverse"** — the last route is remembered, so a bare
+  follow-up replays it (or walks it backwards) without you naming the rooms
+  again.
+- **Deterministic where it can be** — a route over known rooms is resolved
+  straight from the store with no model round-trip; a single goal or a novel
+  place still goes to the LLM as before.
+
+---
+
+## What's new (dynamic-locations)
+
+Builds on the **nav-feedback** features below, and replaces the two hardcoded
+rooms with a saved set you grow by voice:
+
+- **"Save this location as _\<name\>_"** — records the robot's current pose (from
+  AMCL) under that name and persists it to a JSON file
+  (`~/.nav2gpt/locations.json`, override with `NAV2GPT_LOCATIONS`). It survives
+  restarts and is seeded with the kitchen and bedroom, so nothing breaks on a
+  fresh machine.
+- **"Where am I?"** — answers with the nearest known room (or the coordinates if
+  you're not near one) and speaks it aloud.
+- **Saved rooms become nav targets** — the LLM prompt is built from the live
+  store, so once you save "the desk" you can say "go to the desk". Progress and
+  arrival feedback name it too.
+
+These two commands are intercepted before the LLM (they act on the current pose,
+not a destination), so they're deterministic. In dev mode you can now type a
+command at the prompt instead of speaking it.
+
+---
+
+## What's new (nav-feedback)
+
+Builds on the **dev-setup** baseline:
+
+- **It navigates.** Fixed the model/costmap mismatch (Gazebo spawns a *burger*
+  while Nav2 was set up for a *waffle*), the duplicate `robot_state_publisher`,
+  the AMCL initial pose, the map-to-world alignment, and the LLM goal schema — so
+  the robot reliably reaches the kitchen, by a direct goal and by voice.
+- **Reproducible setup** — a devcontainer, a real `requirements.txt`, and the
+  step-by-step instructions below.
+- **A build/test/report harness** (`scripts/`): `ci.sh`, pytest smoke tests, a
+  main-vs-branch comparison, and a guided integration run, all producing reports.
+- **Honest results** — the `goToPose` API server returns Nav2's real outcome.
+
+And this branch adds richer navigation feedback:
+
+- **Spoken feedback** — the robot announces progress ("Halfway to the kitchen.")
+  and speaks the result via espeak; the destination is named (a known room) or its
+  coordinates.
+- **Status strings** — `goToPose` returns `SUCCEEDED` / `FAILED` / `CANCELED` /
+  `REJECTED`, and the voice node reports a human sentence, not a bare true/false.
+- **Timeout cancellation** — a configurable `nav_timeout_sec` cancels a goal that
+  runs too long.
+
+---
+
 ## Architecture Overview
 
 ```text
@@ -57,13 +142,18 @@ Dev Containers: Reopen in Container
 
 The first build takes **10–20 minutes** — it installs ROS 2 Humble, Nav2, Gazebo, Ollama, Whisper, and all Python dependencies.
 
-### 3. Pull the Ollama Model
+### 3. Ollama Model (automatic)
+
+The container's `postCreateCommand` (`.devcontainer/post_create.sh`) starts the
+Ollama server and pulls `llama3` (~4.7 GB) for you on first build — no manual
+step needed. It's stored in the persistent `ollama-models` Docker volume and
+survives container rebuilds, so it's only ever downloaded once. If the pull
+fails (e.g. no network during the build), it prints a warning and you can run
+it yourself:
 
 ```bash
 ollama pull llama3
 ```
-
-This downloads ~4.7 GB and only needs to be done once. The model is stored in the persistent `ollama-models` Docker volume and survives container rebuilds.
 
 > **Tip:** For faster CPU inference, use a smaller model instead:
 > ```bash
@@ -84,11 +174,19 @@ source install/setup.bash
 
 > **Note:** You may see `UserWarning: Unknown distribution option: 'tests_require'`. That warning is harmless.
 
+> **Running outside the dev container?** The Dev Container installs all Python
+> dependencies for you. On a bare ROS 2 Humble machine, install them with:
+> ```bash
+> pip3 install -r requirements.txt
+> ```
+> ROS packages themselves (rclpy, Nav2, cv_bridge, …) still come from apt — see
+> the `ros-humble-*` list in `.devcontainer/Dockerfile`.
+
 ---
 
 ## Running the Project
 
-You need **four terminals** open inside the container. In VS Code, open new terminals with `` Ctrl+` `` and the `+` button.
+You need **five terminals** open inside the container. In VS Code, open new terminals with `` Ctrl+` `` and the `+` button. (The `scripts/integration_test.sh` harness runs all of these for you and walks you through them.)
 
 ### Terminal 1 — Launch Gazebo + TurtleBot3
 
@@ -108,7 +206,20 @@ ros2 launch ros2ai navigation2.launch.py
 
 > **Note:** `navigation2.launch.py` includes commented-out `gzserver` and `gzclient` launch actions. Keep them commented, because Gazebo is already started in Terminal 1.
 
-### Terminal 3 — Start the Nav2 API Server
+### Terminal 3 — Localize (seed AMCL's initial pose)
+
+```bash
+source /nav2gpt/nav2gpt_ws/install/setup.bash
+./scripts/set_initial_pose.sh          # auto-detects the real spawn pose from Gazebo
+```
+
+`set_initial_pose.sh` reads the robot's **actual** spawn pose live from Gazebo (via `scripts/get_spawn_pose.py`) and seeds AMCL with it — no hardcoded guess. You can still override with explicit coordinates (`./scripts/set_initial_pose.sh <x> <y>`) or click **2D Pose Estimate** in RViz.
+
+Required for localization: until AMCL has an initial pose it never publishes the `map → odom` transform, so Nav2 reports `frame [map] does not exist`, navigation goals never resolve, and the API server's service call blocks.
+
+> A `static_transform_publisher map odom` will silence the "frame missing" error, but it *fakes* localization — the costmap ends up offset from reality and the robot paths around walls that aren't there. Seed AMCL instead.
+
+### Terminal 4 — Start the Nav2 API Server
 
 ```bash
 source /nav2gpt/nav2gpt_ws/install/setup.bash
@@ -121,7 +232,7 @@ Expected output:
 [INFO] [nav2_api_server]: Nav2 API Server is ready
 ```
 
-### Terminal 4 — Start the LLM Voice Node
+### Terminal 5 — Start the LLM Voice Node
 
 ```bash
 source /nav2gpt/nav2gpt_ws/install/setup.bash
@@ -136,6 +247,88 @@ Press Enter to start recording...
 ```
 
 Press **Enter** to begin recording. The node records for a fixed **10 seconds** and then automatically stops. Whisper transcribes the audio, the LLM parses the intent, and the robot navigates to the selected location.
+
+---
+
+## Running the Tests
+
+Tests live in `tests/` (one `test_<feature>.py` per feature). Pure-logic tests
+run anywhere; tests needing a live ROS graph skip themselves when ROS isn't
+available, so the suite is safe to run on any machine.
+
+```bash
+pip3 install -r requirements-dev.txt   # once, installs pytest
+./scripts/run_tests.sh                  # runs the suite, writes reports/<branch>_<timestamp>.md
+```
+
+`run_tests.sh` runs the pytest suite **and** a functional comparison against
+`main` (`compare_with_main.sh`), folding both into one Markdown report. A report
+is always written — even if tests fail or pytest/ROS are missing (the
+environment is recorded in the report). To publish it back to the branch:
+
+```bash
+./scripts/push_report.sh                # commits + pushes the newest report
+```
+
+> **Run tests inside the Dev Container.** The harness targets ROS 2 **Humble**,
+> which is what the Dev Container provides. Running `colcon`/tests on a host with
+> a different ROS distro (e.g. Jazzy) will not work — `build_ws.sh` detects a
+> distro mismatch and flags it in the build report.
+
+### Building the workspace (with a captured log)
+
+`scripts/build_ws.sh` runs `colcon build` in `nav2gpt_ws` and tees the full
+output into a build report under `reports/`, so build failures are captured and
+publishable alongside the test reports. It skips cleanly (writing a SKIP report)
+on machines without colcon/ROS.
+
+### Comparing a branch against main
+
+`scripts/compare_with_main.sh` categorizes what a feature branch changes vs
+`main` (robot code vs tooling/docs) and runs a per-feature functional check
+against both. A tooling-only branch shows zero functional changes — proving
+parity with `main`. Each feature branch hones the `feature_check()` function in
+that script to probe the specific behavior it adds.
+
+### Watching it run (visual debug)
+
+`scripts/debug_visual.sh` brings the whole stack up on the Linux machine —
+Gazebo + Nav2 + API server in the background, the voice node in the foreground —
+so you can watch the robot actually move. Ctrl-C tears it all down. Each feature
+branch hones the `feature_demo_hint()` in that script to say what to do and what
+to watch for.
+
+### Guided integration test
+
+`scripts/integration_test.sh` is an interactive, automated walk-through of the
+"Running the Project" steps above: it opens a terminal per stack component,
+pauses at each step with instructions (snapping a screenshot when you confirm
+it — see below), then asks you to confirm the robot did the right thing and
+records a PASS/FAIL integration report. It skips cleanly (writing a SKIP
+report) when there's no graphical session or the workspace isn't built. Each
+feature branch hones `feature_integration()` with the checkpoints and
+pass/fail question for its feature.
+
+It opens real terminal windows via `xterm` (installed in the devcontainer
+image). If you're on a container built **before** `xterm`/`imagemagick`/
+`xdotool` were added to the Dockerfile, it falls back to running each
+component in the background with a log file — rebuild the container
+("Dev Containers: Rebuild Container") to get real windows and screenshots.
+
+### Slideshow-ready artifacts
+
+Every guided run captures documentation-quality visuals under
+`reports/screenshots/<branch>_<timestamp>/`, embedded in the integration
+report: a screenshot of Gazebo/RViz at each confirmed step, a rendered
+"branch graph" poster of the project's git history (generated even on a
+skipped run — no display needed), and a contact-sheet collage combining a
+run's screenshots into one image. All best-effort — missing tools just skip
+that capture rather than failing the run.
+
+It also captures the **stdout/stderr of every launched terminal** (Gazebo,
+Nav2, localization, API server, voice node) — a capped tail of each is saved
+under `reports/logs/<branch>_<timestamp>/` and embedded in the report as
+collapsible sections, so component errors travel to GitHub without copy-paste.
 
 ---
 

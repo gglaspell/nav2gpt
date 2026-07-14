@@ -1,0 +1,8 @@
+# Development / test dependencies (not needed to run the robot).
+#
+#     pip3 install -r requirements-dev.txt
+#
+# Used by scripts/run_tests.sh. On a ROS 2 machine pytest is often already
+# present via the apt package python3-pytest.
+
+pytest>=7.0

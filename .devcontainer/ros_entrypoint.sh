@@ -22,7 +22,10 @@ source /usr/share/colcon_argcomplete/hook/colcon-argcomplete.bash
 # Switch to CycloneDDS
 export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
 
-# TurtleBot3 model for Gazebo simulation
+# TurtleBot3 model for Gazebo simulation.
+# MUST be burger: navigation2.launch.py loads the burger URDF and a burger-tuned
+# params file (robot_radius ~0.105). Burger fits the house doorways; the larger
+# waffle wedges in them, drifting odometry and breaking localization/planning.
 export TURTLEBOT3_MODEL=burger
 
 exec "$@"
