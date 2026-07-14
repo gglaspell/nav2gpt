@@ -14,6 +14,7 @@ from tf_transformations import quaternion_from_euler
 
 import numpy as np
 
+
 class Nav2ApiServer(Node):
     def __init__(self):
         super().__init__("nav2_api_server")
@@ -26,14 +27,13 @@ class Nav2ApiServer(Node):
         # Cancel a goal that runs longer than this many seconds. Override with:
         #   ros2 run ros2ai nav2_api_server --ros-args -p nav_timeout_sec:=30.0
         self.declare_parameter("nav_timeout_sec", 120.0)
-        # Announce arrivals by room name — including rooms saved at runtime — by
+        # Announce arrivals by room name -- including rooms saved at runtime -- by
         # reading the same persistent store the voice node writes to.
         self.store_path = default_store_path()
         # The node otherwise runs silently; announce readiness so operators know
         # the server came up (matches the "ready" line documented in the README).
         self.get_logger().info("Nav2 API Server is ready")
 
-    
     def _make_pose(self, x, y, theta_deg):
         """A map-frame PoseStamped from x, y and a heading in degrees."""
         pose = PoseStamped()
@@ -73,7 +73,7 @@ class Nav2ApiServer(Node):
             # getResult() reports the real CANCELED outcome (not a stale success).
             if not canceled and nav_time is not None and nav_time.sec > timeout:
                 self.get_logger().warn(
-                    f"Navigation exceeded {timeout:.0f}s — canceling the task.")
+                    f"Navigation exceeded {timeout:.0f}s -- canceling the task.")
                 self.nav2_client.cancelTask()
                 canceled = True
             # Spoken progress as the robot closes in (goToPose / goThroughPoses).
@@ -95,7 +95,7 @@ class Nav2ApiServer(Node):
         accepted = self.nav2_client.goToPose(pose)
         if not accepted:
             self.get_logger().error(
-                f"goToPose REJECTED for ({req.x:.2f}, {req.y:.2f}) — goal likely "
+                f"goToPose REJECTED for ({req.x:.2f}, {req.y:.2f}) -- goal likely "
                 "in a lethal/inflated cell, or Nav2 is not active yet.")
             res.status = "REJECTED"
             return res
@@ -126,39 +126,59 @@ class Nav2ApiServer(Node):
 
         if mode == "waypoints":
             self.get_logger().info(f"Following {len(poses)} waypoints...")
-            # followWaypoints returns None on some nav2 versions (task started)
-            # and a bool on others; only an explicit False means rejected.
-            if self.nav2_client.followWaypoints(poses) is False:
+            # followWaypoints' return value is version-dependent: some Nav2
+            # releases return None while the task is merely *starting* (not yet
+            # known-accepted), others return a bool immediately. Treating only
+            # an explicit False as rejection can let a truly-rejected goal on a
+            # None-returning version fall through to _run_to_completion() and
+            # spin forever waiting on a task that never started. Guard against
+            # that by also bailing out if the task client reports no active
+            # goal handle after the call.
+            accepted = self.nav2_client.followWaypoints(poses)
+            if accepted is False:
                 self.get_logger().error(
-                    "followWaypoints REJECTED — a pose is unreachable or Nav2 is "
+                    "followWaypoints REJECTED -- a pose is unreachable or Nav2 is "
                     "not active yet.")
+                res.status = "REJECTED"
+                return res
+            if accepted is None and getattr(
+                    self.nav2_client, "goal_handle", None) is None:
+                self.get_logger().error(
+                    "followWaypoints did not start (no goal handle) -- treating "
+                    "as REJECTED.")
                 res.status = "REJECTED"
                 return res
         else:
             accepted = self.nav2_client.goThroughPoses(poses)
             if not accepted:
                 self.get_logger().error(
-                    "goThroughPoses REJECTED — a pose is unreachable or Nav2 is "
+                    "goThroughPoses REJECTED -- a pose is unreachable or Nav2 is "
                     "not active yet.")
                 res.status = "REJECTED"
                 return res
             self.get_logger().info(f"Going through {len(poses)} poses...")
 
-        # One long task over every stop — give it a per-stop share of the budget.
+        # One long task over every stop -- give it a per-stop share of the budget.
         result = self._run_to_completion(dest, timeout_scale=len(poses))
         self.get_logger().info(f"followRoute ({mode}) result: {result}")
         res.status = result.name
         speak(status_message(res.status, dest))
         return res
 
+
 def main(args=None):
     rclpy.init(args=args)
+    node = None
     try:
         node = Nav2ApiServer()
         rclpy.spin(node)
     except Exception as e:
         print(f"Exception: {e}")
-    rclpy.shutdown()
+    finally:
+        if node is not None:
+            node.destroy_node()
+        rclpy.shutdown()
+
 
 if __name__ == '__main__':
     main()
