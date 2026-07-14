@@ -23,9 +23,17 @@ ROOMS = {name: (pose[0], pose[1]) for name, pose in DEFAULT_ROOMS.items()}
 
 
 def default_store_path():
-    """Where saved locations live. Override with the NAV2GPT_LOCATIONS env var."""
-    return os.environ.get("NAV2GPT_LOCATIONS") or os.path.join(
+    """Where saved locations live. Override with the NAV2GPT_LOCATIONS env var.
+
+    The path is always resolved to an absolute path: a relative override (e.g.
+    NAV2GPT_LOCATIONS=locations.json) would otherwise be written wherever the
+    process happens to be launched from, instead of a stable, predictable
+    location, and successive runs from different working directories would
+    each see a different (or missing) store.
+    """
+    raw = os.environ.get("NAV2GPT_LOCATIONS") or os.path.join(
         os.path.expanduser("~"), ".nav2gpt", "locations.json")
+    return os.path.abspath(os.path.expanduser(raw))
 
 
 def normalize_name(name):
@@ -38,7 +46,7 @@ def load_locations(path=None):
     saved file (the file wins on a name clash).
 
     With no path, or if the file is missing or unreadable, just the defaults are
-    returned — so navigation never breaks on a fresh or corrupt store.
+    returned -- so navigation never breaks on a fresh or corrupt store.
     """
     rooms = dict(DEFAULT_ROOMS)
     if not path:
@@ -66,8 +74,9 @@ def save_location(name, x, y, theta=0.0, path=None):
     rooms = load_locations(path)
     rooms[normalize_name(name)] = (float(x), float(y), float(theta))
     if path:
-        os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
-        with open(path, "w") as f:
+        abs_path = os.path.abspath(os.path.expanduser(path))
+        os.makedirs(os.path.dirname(abs_path) or ".", exist_ok=True)
+        with open(abs_path, "w") as f:
             json.dump({n: list(p) for n, p in rooms.items()},
                       f, indent=2, sort_keys=True)
     return rooms
@@ -105,8 +114,7 @@ def _num(v):
 def describe_rooms(rooms):
     """One line per room, in the phrasing the LLM prompt expects. Feeding this
     from the live store (instead of two hardcoded lines) lets the robot navigate
-    to rooms saved at runtime.
-    """
+    to rooms saved at runtime."""
     return "\n".join(
         f"the coordinates of {name} is x: {_num(p[0])}, y: {_num(p[1])}, "
         f"theta: {_num(p[2] if len(p) > 2 else 0.0)}"
